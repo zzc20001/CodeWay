@@ -34,7 +34,7 @@ jobs:
         run: |
           cd docs
           pip install sphinxawesome-theme
-          sphinx-build -M html. _build/
+          sphinx-build -M html . _build/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
