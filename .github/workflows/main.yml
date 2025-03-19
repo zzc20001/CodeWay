@@ -1,17 +1,26 @@
-name: Build Sphinx Documentation
+name: Build and Deploy Sphinx Documentation to GitHub Pages
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build:
+  build_and_deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v4
@@ -25,4 +34,19 @@ jobs:
         run: |
           cd docs
           pip install sphinxawesome-theme
-          sphinx-build -M html . _build/
+          sphinx-build -M html. _build/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/_build/html'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
