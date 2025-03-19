@@ -1,0 +1,27 @@
+name: Build Sphinx Documentation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install Sphinx
+        run: pip install -U sphinx
+
+      - name: Build Sphinx documentation
+        run: |
+          cd docs
+          sphinx-build -M html . _build/
