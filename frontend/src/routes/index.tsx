@@ -14,6 +14,13 @@ import { Send, DownloadCloud, Plus, Menu, Search } from "lucide-react"
 import React from 'react'
 import {createRoot} from 'react-dom/client'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import 'katex/dist/katex.min.css'
+
 export const Route = createFileRoute('/')({
   component: ChatGPT,
 })
@@ -233,7 +240,30 @@ function ChatGPT() {
                 <div className="ml-auto max-w-[80%]">
                   <div className="rounded-lg bg-muted p-3 markdown-content">
                     <div className="prose prose-headings:mt-2 prose-headings:mb-2 prose-headings:font-bold prose-p:my-1 max-w-none">
-                      <Markdown>
+                      <Markdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                          code(props) {
+                            const {children, className, node, ...rest} = props
+                            const match = /language-(\w+)/.exec(className || '')
+                            return match ? (
+                              <SyntaxHighlighter
+                                {...rest}
+                                PreTag="div"
+                                children={String(children).replace(/\n$/, '')}
+                                language={match[1]}
+                                style={vscDarkPlus}
+                                customStyle={{ margin: 0 }}
+                              />
+                            ) : (
+                              <code {...rest} className={className}>
+                                {children}
+                              </code>
+                            )
+                          }
+                        }}
+                      >
                         {message.content}
                       </Markdown>
                     </div>
@@ -243,7 +273,30 @@ function ChatGPT() {
                 <div className="mr-auto max-w-[80%]">
                   <div className="rounded-lg p-3 markdown-content">
                     <div className="prose prose-headings:mt-2 prose-headings:mb-2 prose-headings:font-bold prose-p:my-1 max-w-none">
-                      <Markdown>
+                      <Markdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                          code(props) {
+                            const {children, className, node, ...rest} = props
+                            const match = /language-(\w+)/.exec(className || '')
+                            return match ? (
+                              <SyntaxHighlighter
+                                {...rest}
+                                PreTag="div"
+                                children={String(children).replace(/\n$/, '')}
+                                language={match[1]}
+                                style={dracula}
+                                customStyle={{ margin: 0 }}
+                              />
+                            ) : (
+                              <code {...rest} className={className}>
+                                {children}
+                              </code>
+                            )
+                          }
+                        }}
+                      >
                         {message.content}
                       </Markdown>
                     </div>
