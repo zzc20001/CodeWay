@@ -2,14 +2,18 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ChevronDown, Send, DownloadCloud, Plus, Menu, Search } from "lucide-react"
-
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select"
+import { Send, DownloadCloud, Plus, Menu, Search } from "lucide-react"
+import React from 'react'
+import {createRoot} from 'react-dom/client'
+import Markdown from 'react-markdown'
 export const Route = createFileRoute('/')({
   component: ChatGPT,
 })
@@ -40,7 +44,7 @@ function ChatGPT() {
 
   const [activeChat, setActiveChat] = useState<string>('1');
   const [inputValue, setInputValue] = useState<string>('');
-  const [model, setModel] = useState<string>('GPT-4');
+  const [model, setModel] = useState<string>('ChatGPT 4o');
   const [filterValue, setFilterValue] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
@@ -88,7 +92,7 @@ function ChatGPT() {
       const gptResponse: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `这是模拟的GPT回复：您发送了 "${inputValue}"`,
+        content: `这是模拟的${model}回复：您发送了 "${inputValue}"`,
         timestamp: new Date()
       };
       
@@ -155,21 +159,18 @@ function ChatGPT() {
             <Plus size={18} />
           </Button>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="flex items-center gap-1 h-8">
-                {model} <ChevronDown size={14} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setModel('GPT-3.5')}>
-                GPT-3.5
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setModel('GPT-4')}>
-                GPT-4
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Select
+            value={model}
+            onValueChange={setModel}
+          >
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="Select model" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ChatGPT 4o">ChatGPT 4o</SelectItem>
+              <SelectItem value="Qwen QwQ-32B">Qwen QwQ-32B</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         
         <div className="ml-auto">
@@ -208,7 +209,7 @@ function ChatGPT() {
             filteredChats.map(chat => (
               <div
                 key={chat.id}
-                className={`mb-1 cursor-pointer rounded-lg p-2 text-sm ${
+                className={`mb-1 cursor-pointer rounded-lg p-2 text-sm text-ellipsis text-nowrap ${
                   chat.id === activeChat ? 'bg-muted' : 'hover:bg-muted/50'
                 }`}
                 onClick={() => setActiveChat(chat.id)}
@@ -230,14 +231,22 @@ function ChatGPT() {
             <div key={message.id} className="mb-4">
               {message.role === 'user' ? (
                 <div className="ml-auto max-w-[80%]">
-                  <div className="rounded-lg bg-muted p-3">
-                    {message.content}
+                  <div className="rounded-lg bg-muted p-3 markdown-content">
+                    <div className="prose prose-headings:mt-2 prose-headings:mb-2 prose-headings:font-bold prose-p:my-1 max-w-none">
+                      <Markdown>
+                        {message.content}
+                      </Markdown>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="mr-auto max-w-[80%]">
-                  <div className="rounded-lg p-3">
-                    {message.content}
+                  <div className="rounded-lg p-3 markdown-content">
+                    <div className="prose prose-headings:mt-2 prose-headings:mb-2 prose-headings:font-bold prose-p:my-1 max-w-none">
+                      <Markdown>
+                        {message.content}
+                      </Markdown>
+                    </div>
                   </div>
                 </div>
               )}
@@ -248,11 +257,11 @@ function ChatGPT() {
         {/* Input Area */}
         <div className="border-t p-4">
           <div className="relative">
-            <Input
+            <Textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="输入消息..."
-              className="pr-10 rounded-full bg-muted"
+              className="pr-10 rounded-lg bg-muted resize-none min-h-[60px] max-h-[200px]"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -263,7 +272,7 @@ function ChatGPT() {
             <Button 
               size="icon" 
               variant="ghost" 
-              className="absolute right-2 top-1/2 -translate-y-1/2" 
+              className="absolute right-2 bottom-2" 
               onClick={handleSendMessage}
               disabled={!inputValue.trim()}
             >
