@@ -11,8 +11,6 @@ import {
   SelectValue
 } from "@/components/ui/select"
 import { Send, DownloadCloud, Plus, Menu, Search } from "lucide-react"
-import React from 'react'
-import {createRoot} from 'react-dom/client'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -20,9 +18,20 @@ import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { useChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
+
+// Create a query client
+const queryClient = new QueryClient()
 
 export const Route = createFileRoute('/')({
-  component: ChatGPT,
+  component: () => (
+    <QueryClientProvider client={queryClient}>
+      <ReactQueryDevtools initialIsOpen={false} />
+      <ChatGPT />
+    </QueryClientProvider>
+  ),
 })
 
 type Message = {
@@ -51,9 +60,12 @@ function ChatGPT() {
 
   const [activeChat, setActiveChat] = useState<string>('1');
   const [inputValue, setInputValue] = useState<string>('');
-  const [model, setModel] = useState<string>('ChatGPT 4o');
+  const [model, setModel] = useState<string>('gpt-4o');
   const [filterValue, setFilterValue] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  
+  // Use the ChatGPT mutation hook
+  const chatGptMutation = useChatGptMutation();
   
   const activeMessages = chats.find(chat => chat.id === activeChat)?.messages || [];
   
@@ -94,25 +106,57 @@ function ChatGPT() {
     setChats(updatedChats);
     setInputValue('');
     
-    // Simulate GPT response
-    setTimeout(() => {
-      const gptResponse: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `这是模拟的${model}回复：您发送了 "${inputValue}"`,
-        timestamp: new Date()
-      };
-      
-      setChats(prevChats => prevChats.map(chat => {
-        if (chat.id === activeChat) {
-          return {
-            ...chat,
-            messages: [...chat.messages, gptResponse]
-          };
-        }
-        return chat;
-      }));
-    }, 1000);
+    // Get the current chat after update
+    const currentChat = updatedChats.find(chat => chat.id === activeChat);
+    if (!currentChat) return;
+    
+    // Format messages for the API
+    const apiMessages = convertMessagesToApiFormat(
+      currentChat.messages,
+      model
+    );
+    
+    // Send request to ChatGPT API
+    chatGptMutation.mutate(apiMessages, {
+      onSuccess: (data) => {
+        const assistantResponse = data.choices[0]?.message.content || "Sorry, I couldn't generate a response.";
+        
+        const gptResponse: Message = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: assistantResponse,
+          timestamp: new Date()
+        };
+        
+        setChats(prevChats => prevChats.map(chat => {
+          if (chat.id === activeChat) {
+            return {
+              ...chat,
+              messages: [...chat.messages, gptResponse]
+            };
+          }
+          return chat;
+        }));
+      },
+      onError: (error) => {
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `Error: ${error.message || '请求失败，请稍后重试。'}`,
+          timestamp: new Date()
+        };
+        
+        setChats(prevChats => prevChats.map(chat => {
+          if (chat.id === activeChat) {
+            return {
+              ...chat,
+              messages: [...chat.messages, errorMessage]
+            };
+          }
+          return chat;
+        }));
+      }
+    });
   };
 
   const createNewChat = () => {
@@ -174,8 +218,8 @@ function ChatGPT() {
               <SelectValue placeholder="Select model" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ChatGPT 4o">ChatGPT 4o</SelectItem>
-              <SelectItem value="Qwen QwQ-32B">Qwen QwQ-32B</SelectItem>
+              <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+              <SelectItem value="qwen-qwq-32b">Qwen QwQ-32B</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -245,17 +289,16 @@ function ChatGPT() {
                         rehypePlugins={[rehypeKatex]}
                         components={{
                           code(props) {
-                            const {children, className, node, ...rest} = props
+                            const {children, className, ...rest} = props
                             const match = /language-(\w+)/.exec(className || '')
                             return match ? (
                               <SyntaxHighlighter
-                                {...rest}
-                                PreTag="div"
-                                children={String(children).replace(/\n$/, '')}
+                                style={dracula}
                                 language={match[1]}
-                                style={vscDarkPlus}
                                 customStyle={{ margin: 0 }}
-                              />
+                              >
+                                {String(children).replace(/\n$/, '')}
+                              </SyntaxHighlighter>
                             ) : (
                               <code {...rest} className={className}>
                                 {children}
@@ -278,17 +321,16 @@ function ChatGPT() {
                         rehypePlugins={[rehypeKatex]}
                         components={{
                           code(props) {
-                            const {children, className, node, ...rest} = props
+                            const {children, className, ...rest} = props
                             const match = /language-(\w+)/.exec(className || '')
                             return match ? (
                               <SyntaxHighlighter
-                                {...rest}
-                                PreTag="div"
-                                children={String(children).replace(/\n$/, '')}
-                                language={match[1]}
                                 style={dracula}
+                                language={match[1]}
                                 customStyle={{ margin: 0 }}
-                              />
+                              >
+                                {String(children).replace(/\n$/, '')}
+                              </SyntaxHighlighter>
                             ) : (
                               <code {...rest} className={className}>
                                 {children}
