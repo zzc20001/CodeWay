@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,7 +20,7 @@ import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { useChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
+import { useChatGptMutation, useStreamChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
 
 // Create a query client
 const queryClient = new QueryClient()
@@ -63,9 +63,14 @@ function ChatGPT() {
   const [model, setModel] = useState<string>('gpt-4o');
   const [filterValue, setFilterValue] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
   
-  // Use the ChatGPT mutation hook
+  // Use the ChatGPT mutation hooks
   const chatGptMutation = useChatGptMutation();
+  const { streamChatCompletion } = useStreamChatGptMutation();
+  
+  // Reference to the current streaming message
+  const streamingMessageRef = useRef<Message | null>(null);
   
   const activeMessages = chats.find(chat => chat.id === activeChat)?.messages || [];
   
@@ -76,8 +81,8 @@ function ChatGPT() {
     );
   }, [chats, filterValue]);
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isStreaming) return;
     
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -116,47 +121,100 @@ function ChatGPT() {
       model
     );
     
-    // Send request to ChatGPT API
-    chatGptMutation.mutate(apiMessages, {
-      onSuccess: (data) => {
-        const assistantResponse = data.choices[0]?.message.content || "Sorry, I couldn't generate a response.";
-        
-        const gptResponse: Message = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: assistantResponse,
-          timestamp: new Date()
+    // Create an initial streaming response message
+    const streamingMessage: Message = {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: '',
+      timestamp: new Date()
+    };
+    
+    // Store the reference to the current streaming message
+    streamingMessageRef.current = streamingMessage;
+    
+    // Add the initial empty assistant message
+    setChats(prevChats => prevChats.map(chat => {
+      if (chat.id === activeChat) {
+        return {
+          ...chat,
+          messages: [...chat.messages, streamingMessage]
         };
-        
-        setChats(prevChats => prevChats.map(chat => {
-          if (chat.id === activeChat) {
-            return {
-              ...chat,
-              messages: [...chat.messages, gptResponse]
-            };
-          }
-          return chat;
-        }));
-      },
-      onError: (error) => {
-        const errorMessage: Message = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `Error: ${error.message || '请求失败，请稍后重试。'}`,
-          timestamp: new Date()
-        };
-        
-        setChats(prevChats => prevChats.map(chat => {
-          if (chat.id === activeChat) {
-            return {
-              ...chat,
-              messages: [...chat.messages, errorMessage]
-            };
-          }
-          return chat;
-        }));
       }
-    });
+      return chat;
+    }));
+    
+    // Set streaming state to true
+    setIsStreaming(true);
+    
+    // Send request to ChatGPT API with streaming
+    try {
+      await streamChatCompletion(
+        apiMessages,
+        {
+          onChunk: (chunk) => {
+            const content = chunk.choices[0]?.delta?.content || '';
+            
+            if (content) {
+              // Update the streaming message with new content
+              setChats(prevChats => 
+                prevChats.map(chat => {
+                  if (chat.id === activeChat) {
+                    return {
+                      ...chat,
+                      messages: chat.messages.map(msg => {
+                        if (msg.id === streamingMessageRef.current?.id) {
+                          return {
+                            ...msg,
+                            content: msg.content + content
+                          };
+                        }
+                        return msg;
+                      })
+                    };
+                  }
+                  return chat;
+                })
+              );
+            }
+          },
+          onError: (error) => {
+            // Update streaming message with error
+            setChats(prevChats => 
+              prevChats.map(chat => {
+                if (chat.id === activeChat) {
+                  return {
+                    ...chat,
+                    messages: chat.messages.map(msg => {
+                      if (msg.id === streamingMessageRef.current?.id) {
+                        return {
+                          ...msg,
+                          content: `Error: ${error.message || '请求失败，请稍后重试。'}`
+                        };
+                      }
+                      return msg;
+                    })
+                  };
+                }
+                return chat;
+              })
+            );
+            
+            // Reset streaming state
+            setIsStreaming(false);
+            streamingMessageRef.current = null;
+          },
+          onComplete: () => {
+            // Reset streaming state
+            setIsStreaming(false);
+            streamingMessageRef.current = null;
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Failed to stream response:', error);
+      setIsStreaming(false);
+      streamingMessageRef.current = null;
+    }
   };
 
   const createNewChat = () => {
@@ -355,8 +413,9 @@ function ChatGPT() {
             <Textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="输入消息..."
+              placeholder={isStreaming ? "等待AI回复中..." : "输入消息..."}
               className="pr-10 rounded-lg bg-muted resize-none min-h-[60px] max-h-[200px]"
+              disabled={isStreaming}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -369,7 +428,7 @@ function ChatGPT() {
               variant="ghost" 
               className="absolute right-2 bottom-2" 
               onClick={handleSendMessage}
-              disabled={!inputValue.trim()}
+              disabled={!inputValue.trim() || isStreaming}
             >
               <Send size={18} />
             </Button>
