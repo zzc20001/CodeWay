@@ -10,4 +10,4 @@ wheels/
 .venv
 
 # docs
-_build/
+docs/_build/
