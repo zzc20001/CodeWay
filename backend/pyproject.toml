@@ -7,4 +7,8 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.115.12",
     "granian>=2.2.0",
+    "supabase>=2.3.2",
+    "python-dotenv>=1.0.1",
+    "pydantic>=2.7.0",
+    "email-validator>=2.1.1",
 ]

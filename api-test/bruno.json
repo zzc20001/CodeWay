@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "codeway",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

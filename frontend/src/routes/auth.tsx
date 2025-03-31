@@ -1,6 +1,8 @@
-import { createFileRoute, useSearch } from '@tanstack/react-router'
+import { createFileRoute, useSearch, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
+import { useMutation } from '@tanstack/react-query'
+import axios from 'axios'
 
 // Validation schemas
 const emailSchema = z.string()
@@ -14,6 +16,30 @@ const passwordSchema = z.string()
   .regex(/[0-9]/, 'Password must contain at least one number')
   .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character')
 
+// Authentication API functions
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+interface AuthCredentials {
+  email: string;
+  password: string;
+}
+
+interface RegisterCredentials extends AuthCredentials {
+  confirmPassword?: string;
+}
+
+const loginUser = async (credentials: AuthCredentials) => {
+  const response = await axios.post(`${API_URL}/api/login`, credentials);
+  return response.data;
+}
+
+const registerUser = async (credentials: RegisterCredentials) => {
+  // Remove confirmPassword before sending to API
+  const { confirmPassword, ...apiCredentials } = credentials;
+  const response = await axios.post(`${API_URL}/api/register`, apiCredentials);
+  return response.data;
+}
+
 export const Route = createFileRoute('/auth')({
   component: AuthComponent,
   validateSearch: (search: Record<string, unknown>) => {
@@ -24,6 +50,7 @@ export const Route = createFileRoute('/auth')({
 })
 
 function AuthComponent() {
+  const navigate = useNavigate();
   const { mode } = useSearch({ from: '/auth' })
   const [isLogin, setIsLogin] = useState(mode === 'login')
   const [email, setEmail] = useState('')
@@ -33,7 +60,42 @@ function AuthComponent() {
     email?: string; 
     password?: string;
     confirmPassword?: string;
+    auth?: string;
   }>({})
+
+  // Login mutation
+  const loginMutation = useMutation({
+    mutationFn: loginUser,
+    onSuccess: (data) => {
+      // Store auth token or user data
+      localStorage.setItem('auth_token', data.token);
+      // Redirect to dashboard or home
+      navigate({ to: '/' });
+    },
+    onError: (error: any) => {
+      setErrors(prev => ({ 
+        ...prev, 
+        auth: error.response?.data?.message || 'Login failed. Please try again.' 
+      }));
+    }
+  });
+
+  // Register mutation
+  const registerMutation = useMutation({
+    mutationFn: registerUser,
+    onSuccess: (data) => {
+      // Store auth token or user data
+      localStorage.setItem('auth_token', data.token);
+      // Redirect to dashboard or home
+      navigate({ to: '/' });
+    },
+    onError: (error: any) => {
+      setErrors(prev => ({ 
+        ...prev, 
+        auth: error.response?.data?.message || 'Registration failed. Please try again.' 
+      }));
+    }
+  });
 
   const validateForm = () => {
     const newErrors: { 
@@ -50,31 +112,44 @@ function AuthComponent() {
       }
     }
 
-    try {
-      passwordSchema.parse(password)
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        newErrors.password = error.errors[0].message
+    // Only validate password complexity for registration, not for login
+    if (!isLogin) {
+      try {
+        passwordSchema.parse(password)
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          newErrors.password = error.errors[0].message
+        }
+      }
+      
+      if (password !== confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match'
+      }
+    } else {
+      // For login, just check if password is not empty
+      if (!password) {
+        newErrors.password = 'Password is required'
       }
     }
 
-    if (!isLogin && password !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match'
-    }
-
-    setErrors(newErrors)
+    setErrors(prev => ({ ...prev, ...newErrors }))
     return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     
     if (!validateForm()) {
-      return
+      return;
     }
 
-    // TODO: Implement actual authentication logic here
-    console.log(isLogin ? 'Logging in...' : 'Registering...', { email, password })
+    const credentials = { email, password };
+    
+    if (isLogin) {
+      loginMutation.mutate(credentials);
+    } else {
+      registerMutation.mutate({ ...credentials, confirmPassword });
+    }
   }
 
   return (
@@ -160,9 +235,12 @@ function AuthComponent() {
                   {errors.password ? (
                     <p className="mt-1 text-sm text-red-500">{errors.password}</p>
                   ) : (
-                    <p className="mt-1 text-sm text-gray-500">
-                      Password must be at least 8 characters and contain uppercase, lowercase, number, and special character
-                    </p>
+                    // Only show password requirements for registration
+                    !isLogin && (
+                      <p className="mt-1 text-sm text-gray-500">
+                        Password must be at least 8 characters and contain uppercase, lowercase, number, and special character
+                      </p>
+                    )
                   )}
                 </div>
                 {!isLogin && (
@@ -193,12 +271,30 @@ function AuthComponent() {
                 )}
               </div>
 
+              {errors.auth && (
+                <div className="rounded-md bg-red-50 p-4">
+                  <div className="flex">
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">Authentication Error</h3>
+                      <div className="mt-2 text-sm text-red-700">
+                        <p>{errors.auth}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  disabled={loginMutation.isPending || registerMutation.isPending}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                 >
-                  {isLogin ? 'Sign in' : 'Register'}
+                  {(loginMutation.isPending || registerMutation.isPending) ? (
+                    <span>Processing...</span>
+                  ) : (
+                    <span>{isLogin ? 'Sign in' : 'Register'}</span>
+                  )}
                 </button>
               </div>
             </form>
