@@ -34,6 +34,7 @@ jobs:
         run: |
           cd docs
           pip install sphinxawesome-theme
+          pip install --upgrade myst-parser
           sphinx-build -M html . _build/
 
       - name: Setup Pages
