@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useSearch } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
 
@@ -16,10 +16,16 @@ const passwordSchema = z.string()
 
 export const Route = createFileRoute('/auth')({
   component: AuthComponent,
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      mode: search.mode === 'register' ? 'register' : 'login'
+    }
+  }
 })
 
 function AuthComponent() {
-  const [isLogin, setIsLogin] = useState(true)
+  const { mode } = useSearch({ from: '/auth' })
+  const [isLogin, setIsLogin] = useState(mode === 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')

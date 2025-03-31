@@ -21,6 +21,7 @@ import 'katex/dist/katex.min.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useChatGptMutation, useStreamChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
+import { useNavigate } from '@tanstack/react-router'
 
 // Create a query client
 const queryClient = new QueryClient()
@@ -49,6 +50,7 @@ type Chat = {
 }
 
 function ChatGPT() {
+  const navigate = useNavigate();
   const [chats, setChats] = useState<Chat[]>([
     {
       id: '1',
@@ -295,10 +297,10 @@ function ChatGPT() {
             </Button>
           ) : (
             <>
-              <Button variant="outline"  onClick={() => {}}>
+              <Button variant="outline" onClick={() => navigate({ to: '/auth', search: { mode: 'login' } })}>
                 Login
               </Button>
-              <Button variant="outline"  onClick={() => {}}>
+              <Button variant="outline" onClick={() => navigate({ to: '/auth', search: { mode: 'register' } })}>
                 Register
               </Button>
             </>
