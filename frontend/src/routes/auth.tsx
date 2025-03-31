@@ -1,4 +1,4 @@
-import { createFileRoute, useSearch, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useSearch, useNavigate, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
@@ -46,6 +46,18 @@ export const Route = createFileRoute('/auth')({
     return {
       mode: search.mode === 'register' ? 'register' : 'login'
     }
+  },
+  beforeLoad: async () => {
+    // Check if the user is already authenticated
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      // Redirect to home if already authenticated
+      throw redirect({
+        to: '/',
+        replace: true,
+      })
+    }
+    return {}
   }
 })
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import { Send, DownloadCloud, Plus, Menu, Search, User } from "lucide-react"
+import { Send, DownloadCloud, Plus, Menu, Search, User, LogOut } from "lucide-react"
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -66,6 +66,19 @@ function ChatGPT() {
   const [filterValue, setFilterValue] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // Check authentication status on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    setIsAuthenticated(!!token);
+  }, []);
+
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    setIsAuthenticated(false);
+  };
   
   // Use the ChatGPT mutation hooks
   const chatGptMutation = useChatGptMutation();
@@ -255,7 +268,6 @@ function ChatGPT() {
     setSidebarOpen(prev => !prev);
     console.log("Toggling sidebar:", !sidebarOpen); // Debug log
   };
-  const isAuthenticated = false;
 
   return (
     <div className="flex h-full w-full relative">
@@ -290,11 +302,16 @@ function ChatGPT() {
           <Button variant="outline" size="icon" onClick={exportChat}>
             <DownloadCloud size={18} />
           </Button>
-          {/* log in and register */}
+          {/* Authentication UI */}
           {isAuthenticated ? (
-            <Button variant="outline" size="icon" onClick={() => {}}>
-              <User size={18} />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" title="User Profile">
+                <User size={18} />
+              </Button>
+              <Button variant="outline" size="icon" onClick={handleLogout} title="Logout">
+                <LogOut size={18} />
+              </Button>
+            </div>
           ) : (
             <>
               <Button variant="outline" onClick={() => navigate({ to: '/auth', search: { mode: 'login' } })}>
