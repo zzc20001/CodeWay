@@ -26,6 +26,14 @@ import { useNavigate } from '@tanstack/react-router'
 // Create a query client
 const queryClient = new QueryClient()
 
+// Generate unique IDs for React keys
+let idCounter = 0;
+const generateUniqueId = (prefix = '') => {
+  const timestamp = Date.now();
+  const uniqueId = `${prefix}${timestamp}-${idCounter++}`;
+  return uniqueId;
+};
+
 export const Route = createFileRoute('/')({
   component: () => (
     <QueryClientProvider client={queryClient}>
@@ -53,14 +61,14 @@ function ChatGPT() {
   const navigate = useNavigate();
   const [chats, setChats] = useState<Chat[]>([
     {
-      id: '1',
+      id: generateUniqueId('chat-'),
       title: 'New Chat',
       messages: [],
       timestamp: new Date()
     }
   ]);
 
-  const [activeChat, setActiveChat] = useState<string>('1');
+  const [activeChat, setActiveChat] = useState<string>(chats[0].id);
   const [inputValue, setInputValue] = useState<string>('');
   const [model, setModel] = useState<string>('gpt-4o');
   const [filterValue, setFilterValue] = useState<string>('');
@@ -81,7 +89,6 @@ function ChatGPT() {
   };
   
   // Use the ChatGPT mutation hooks
-  const chatGptMutation = useChatGptMutation();
   const { streamChatCompletion } = useStreamChatGptMutation();
   
   // Reference to the current streaming message
@@ -100,7 +107,7 @@ function ChatGPT() {
     if (!inputValue.trim() || isStreaming) return;
     
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUniqueId('msg-'),
       role: 'user',
       content: inputValue,
       timestamp: new Date()
@@ -138,7 +145,7 @@ function ChatGPT() {
     
     // Create an initial streaming response message
     const streamingMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUniqueId('msg-'),
       role: 'assistant',
       content: '',
       timestamp: new Date()
@@ -203,7 +210,7 @@ function ChatGPT() {
                       if (msg.id === streamingMessageRef.current?.id) {
                         return {
                           ...msg,
-                          content: `Error: ${error.message || '请求失败，请稍后重试。'}`
+                          content: `Error: ${error.message || 'Unknown error'}`
                         };
                       }
                       return msg;
@@ -234,7 +241,7 @@ function ChatGPT() {
 
   const createNewChat = () => {
     const newChat: Chat = {
-      id: Date.now().toString(),
+      id: generateUniqueId('chat-'),
       title: 'New Chat',
       messages: [],
       timestamp: new Date()
@@ -249,7 +256,7 @@ function ChatGPT() {
     if (!chat) return;
     
     const chatContent = chat.messages.map(msg => 
-      `${msg.role === 'user' ? '用户' : 'GPT'}: ${msg.content}`
+      `${msg.role === 'user' ? 'User' : 'GPT'}: ${msg.content}`
     ).join('\n\n');
     
     const blob = new Blob([chatContent], { type: 'text/plain' });
