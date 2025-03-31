@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import { Send, DownloadCloud, Plus, Menu, Search } from "lucide-react"
+import { Send, DownloadCloud, Plus, Menu, Search, User } from "lucide-react"
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -52,7 +52,7 @@ function ChatGPT() {
   const [chats, setChats] = useState<Chat[]>([
     {
       id: '1',
-      title: '新对话',
+      title: 'New Chat',
       messages: [],
       timestamp: new Date()
     }
@@ -220,7 +220,7 @@ function ChatGPT() {
   const createNewChat = () => {
     const newChat: Chat = {
       id: Date.now().toString(),
-      title: '新对话',
+      title: 'New Chat',
       messages: [],
       timestamp: new Date()
     };
@@ -253,6 +253,7 @@ function ChatGPT() {
     setSidebarOpen(prev => !prev);
     console.log("Toggling sidebar:", !sidebarOpen); // Debug log
   };
+  const isAuthenticated = false;
 
   return (
     <div className="flex h-full w-full relative">
@@ -267,25 +268,41 @@ function ChatGPT() {
           <Button variant="ghost" size="icon" onClick={createNewChat} className="mr-2">
             <Plus size={18} />
           </Button>
-          
+          <span className="mr-2 font-bold">CodeWay</span>
           <Select
             value={model}
             onValueChange={setModel}
+            
           >
             <SelectTrigger className="w-[180px] h-8">
               <SelectValue placeholder="Select model" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+              <SelectItem value="gpt-4o">ChatGPT-4o</SelectItem>
               <SelectItem value="qwen-qwq-32b">Qwen QwQ-32B</SelectItem>
             </SelectContent>
           </Select>
         </div>
         
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
           <Button variant="outline" size="icon" onClick={exportChat}>
             <DownloadCloud size={18} />
           </Button>
+          {/* log in and register */}
+          {isAuthenticated ? (
+            <Button variant="outline" size="icon" onClick={() => {}}>
+              <User size={18} />
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline"  onClick={() => {}}>
+                Login
+              </Button>
+              <Button variant="outline"  onClick={() => {}}>
+                Register
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -302,7 +319,7 @@ function ChatGPT() {
             <Input
               value={filterValue}
               onChange={(e) => setFilterValue(e.target.value)}
-              placeholder="搜索对话..."
+              placeholder="Search chats..."
               className="pl-8 h-8 text-sm"
             />
           </div>
@@ -312,7 +329,7 @@ function ChatGPT() {
         <div className="p-2 overflow-y-auto h-[calc(100%-56px)]">
           {filteredChats.length === 0 ? (
             <div className="text-center py-4 text-sm text-muted-foreground">
-              没有找到匹配的对话
+              No matching chats
             </div>
           ) : (
             filteredChats.map(chat => (
@@ -413,7 +430,7 @@ function ChatGPT() {
             <Textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder={isStreaming ? "等待AI回复中..." : "输入消息..."}
+              placeholder={isStreaming ? "Waiting for AI response..." : "Input message..."}
               className="pr-10 rounded-lg bg-muted resize-none min-h-[60px] max-h-[200px]"
               disabled={isStreaming}
               onKeyDown={(e) => {
