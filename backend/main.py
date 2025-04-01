@@ -1,16 +1,14 @@
-from typing import Union
 import os
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
 app = FastAPI()
-
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -27,7 +25,12 @@ supabase_key = os.environ.get("SUPABASE_ANON_KEY")  # Changed from SUPABASE_KEY 
 def get_supabase() -> Client:
     if not supabase_url or not supabase_key:
         raise HTTPException(status_code=500, detail="Supabase credentials not configured")
-    return create_client(supabase_url, supabase_key)
+    return create_client(supabase_url, supabase_key,
+        options=ClientOptions(
+            postgrest_client_timeout=10,
+            storage_client_timeout=10,
+        )
+    )
 
 # Authentication models
 class UserLogin(BaseModel):
@@ -71,25 +74,25 @@ async def login(user_credentials: UserLogin, supabase: Client = Depends(get_supa
 
 @app.post("/api/register", response_model=AuthResponse)
 async def register(user_data: UserRegister, supabase: Client = Depends(get_supabase)):
-    try:
-        response = supabase.auth.sign_up({
-            'email': user_data.email,
-            'password': user_data.password,
-        })
-        
-        if response.session is None:
-            # Email confirmation required
-            return {
-                "token": "",  # No token until email confirmed
-                "user_id": response.user.id
-            }
-        
+    # try:
+    response = supabase.auth.sign_up({
+        'email': user_data.email,
+        'password': user_data.password,
+    })
+    
+    if response.session is None:
+        # Email confirmation required
         return {
-            "token": response.session.access_token,
+            "token": "",  # No token until email confirmed
             "user_id": response.user.id
         }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
+    
+    return {
+        "token": response.session.access_token,
+        "user_id": response.user.id
+    }
+    # except Exception as e:
+    #     raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
 
 @app.post("/api/verify", response_model=AuthResponse)
@@ -107,15 +110,12 @@ async def verify(verify_data: VerifyRequest, supabase: Client = Depends(get_supa
             raise HTTPException(status_code=400, detail="Verification failed: Invalid token")
             
         update_user = (
-            supabase.table("profile")
+            supabase.table("profiles")
             .update({"username": verify_data.username, "email": verify_data.email})
             .eq("id", response.user.id)
             .execute()
         )
-
-        if update_user["data"] is None:
-            raise HTTPException(status_code=400, detail="Failed to update user profile")
-        
+        print("updated_user", update_user)
         return {
             "token": response.session.access_token,
             "user_id": response.user.id
