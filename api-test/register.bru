@@ -1,0 +1,18 @@
+meta {
+  name: register
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{url}}/api/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "email":"1980036490@qq.com",
+    "password":"123456"
+  }
+}

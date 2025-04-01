@@ -38,6 +38,11 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
 
+class VerifyRequest(BaseModel):
+    email: EmailStr
+    token: str
+    username: str
+
 class AuthResponse(BaseModel):
     token: str
     user_id: str
@@ -46,11 +51,6 @@ class AuthResponse(BaseModel):
 @app.get("/")
 async def read_root():
     return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-async def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
 
 
 @app.post("/api/login", response_model=AuthResponse)
@@ -91,5 +91,37 @@ async def register(user_data: UserRegister, supabase: Client = Depends(get_supab
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
+
+@app.post("/api/verify", response_model=AuthResponse)
+async def verify(verify_data: VerifyRequest, supabase: Client = Depends(get_supabase)):
+    try:
+        response = supabase.auth.verify_otp(
+            {
+                "email": verify_data.email,
+                "token": verify_data.token,
+                "type": "email",  # Hardcoded to email as per Supabase requirements
+            }
+        )
+        
+        if not response.session:
+            raise HTTPException(status_code=400, detail="Verification failed: Invalid token")
+            
+        update_user = (
+            supabase.table("profile")
+            .update({"username": verify_data.username, "email": verify_data.email})
+            .eq("id", response.user.id)
+            .execute()
+        )
+
+        if update_user["data"] is None:
+            raise HTTPException(status_code=400, detail="Failed to update user profile")
+        
+        return {
+            "token": response.session.access_token,
+            "user_id": response.user.id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Verification failed: {str(e)}")
+
 # For development server (uvicorn/granian)
-# Command: granian --interface rsgi main:app
+# Command: granian --interface asgi main:app

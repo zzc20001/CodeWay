@@ -20,7 +20,7 @@ import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { useChatGptMutation, useStreamChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
+import { useStreamChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
 import { useNavigate } from '@tanstack/react-router'
 
 // Create a query client
