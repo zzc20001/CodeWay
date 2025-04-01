@@ -194,9 +194,13 @@ function AuthComponent() {
       navigate({ to: '/' });
     },
     onError: (error: any) => {
+      const errorMessage = error.response?.data?.detail;
+      console.log(errorMessage);
       setErrors(prev => ({ 
         ...prev, 
-        auth: error.response?.data?.message || 'Login failed. Please try again.' 
+        auth: errorMessage === "Authentication failed: Invalid login credentials" 
+          ? "Incorrect password. Please check your password and try again."
+          : errorMessage || 'Login failed. Please try again.' 
       }));
     }
   });
