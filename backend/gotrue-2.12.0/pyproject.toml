@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "gotrue"
+version = "2.12.0" # {x-release-please-version}
+description = "Python Client Library for Supabase Auth"
+authors = ["Joel Lee <joel@joellee.org>"]
+homepage = "https://github.com/supabase/auth-py"
+repository = "https://github.com/supabase/auth-py"
+documentation = "https://github.com/supabase/auth-py"
+readme = "README.md"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+httpx = { version = ">=0.26,<0.29", extras = ["http2"] }
+pydantic = ">=1.10,<3"
+pyjwt = "^2.10.1"
+pytest-mock = "^3.14.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.3.5"
+flake8 = "^7.1.2"
+black = "^25.1.0"
+isort = "^6.0.1"
+pre-commit = "^4.2.0"
+pytest-cov = "^6.0.0"
+pytest-depends = "^1.0.1"
+pytest-asyncio = "^0.26.0"
+Faker = "^37.1.0"
+unasync-cli = { git = "https://github.com/supabase-community/unasync-cli.git", branch = "main" }
+
+[tool.poetry.group.dev.dependencies]
+pygithub = ">=1.57,<3.0"
+respx = ">=0.20.2,<0.23.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -38,6 +38,11 @@ interface VerifyCredentials {
   username: string;
 }
 
+interface ResendCodeCredentials {
+  email: string;
+  password: string;
+}
+
 const loginUser = async (credentials: AuthCredentials) => {
   const response = await axios.post(`${API_URL}/api/login`, credentials);
   return response.data;
@@ -48,8 +53,8 @@ const registerUser = async (credentials: RegisterCredentials) => {
   return response.data;
 }
 
-const resendVerificationCode = async (email: string) => {
-  const response = await axios.post(`${API_URL}/api/register`, { email });
+const resendVerificationCode = async (credentials: ResendCodeCredentials) => {
+  const response = await axios.post(`${API_URL}/api/register`, credentials);
   return response.data;
 }
 
@@ -279,7 +284,7 @@ function AuthComponent() {
   };
 
   const handleResendCode = () => {
-    resendCodeMutation.mutate(email);
+    resendCodeMutation.mutate({ email, password });
   };
 
   const handlePrevStep = () => {

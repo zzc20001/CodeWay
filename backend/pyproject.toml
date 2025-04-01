@@ -11,4 +11,8 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pydantic>=2.7.0",
     "email-validator>=2.1.1",
+    "gotrue",
 ]
+
+[tool.uv.sources]
+gotrue = { path = "gotrue-2.12.0" }

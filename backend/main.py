@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client, ClientOptions
 from dotenv import load_dotenv
+import httpx
 
 # Load environment variables
 load_dotenv()
@@ -31,7 +32,10 @@ def get_supabase() -> Client:
             storage_client_timeout=10,
         )
     )
-
+REQUEST_TIMEOUT: float = 30.0
+custom_sync_transport = httpx.HTTPTransport(retries=0) # 可选：如果你不希望 httpx 自动重试
+sync_timeout = httpx.Timeout(REQUEST_TIMEOUT, connect=30.0) # 总超时10秒，连接超时5秒
+custom_sync_client = httpx.Client(timeout=sync_timeout, transport=custom_sync_transport)
 # Authentication models
 class UserLogin(BaseModel):
     email: EmailStr
@@ -69,30 +73,30 @@ async def login(user_credentials: UserLogin, supabase: Client = Depends(get_supa
             "user_id": response.user.id
         }
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}") # timed out
 
 
 @app.post("/api/register", response_model=AuthResponse)
 async def register(user_data: UserRegister, supabase: Client = Depends(get_supabase)):
-    # try:
-    response = supabase.auth.sign_up({
-        'email': user_data.email,
-        'password': user_data.password,
-    })
-    
-    if response.session is None:
-        # Email confirmation required
+    try:
+        response = supabase.auth.sign_up({
+            'email': user_data.email,
+            'password': user_data.password,
+        })
+        
+        if response.session is None:
+            # Email confirmation required
+            return {
+                "token": "",  # No token until email confirmed
+                "user_id": response.user.id
+            }
+        
         return {
-            "token": "",  # No token until email confirmed
+            "token": response.session.access_token,
             "user_id": response.user.id
         }
-    
-    return {
-        "token": response.session.access_token,
-        "user_id": response.user.id
-    }
-    # except Exception as e:
-    #     raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
 
 @app.post("/api/verify", response_model=AuthResponse)
