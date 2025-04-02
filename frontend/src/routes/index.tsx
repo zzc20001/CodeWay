@@ -106,6 +106,13 @@ function ChatGPT() {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isStreaming) return;
     
+    // Check if user is logged in before sending message
+    if (!isAuthenticated) {
+      // Redirect to login page
+      navigate({ to: '/auth', search: { mode: 'login' } });
+      return;
+    }
+    
     const newMessage: Message = {
       id: generateUniqueId('msg-'),
       role: 'user',
