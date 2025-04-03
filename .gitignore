@@ -12,3 +12,4 @@ wheels/
 # docs
 docs/_build/
 .env
+.DS_Store
