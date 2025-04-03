@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
-import { Send, DownloadCloud, Plus, Menu, Search, User, LogOut } from "lucide-react"
+import { Send, DownloadCloud, Plus, Menu, Search, User, LogOut, Link } from "lucide-react"
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -22,6 +22,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useStreamChatGptMutation, convertMessagesToApiFormat } from '@/utils/chatgpt'
 import { useNavigate } from '@tanstack/react-router'
+import UrlManager from '@/components/ui/url-manager'
 
 // Create a query client
 const queryClient = new QueryClient()
@@ -75,6 +76,7 @@ function ChatGPT() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [urls, setUrls] = useState<string[]>([]);
   
   // Check authentication status on component mount
   useEffect(() => {
@@ -473,15 +475,17 @@ function ChatGPT() {
                 }
               }}
             />
-            <Button 
-              size="icon" 
-              variant="ghost" 
-              className="absolute right-2 bottom-2" 
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isStreaming}
-            >
-              <Send size={18} />
-            </Button>
+            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+              <UrlManager urls={urls} onUrlsChange={setUrls} />
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isStreaming}
+              >
+                <Send size={18} />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
