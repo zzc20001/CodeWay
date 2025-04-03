@@ -12,7 +12,15 @@ dependencies = [
     "pydantic>=2.7.0",
     "email-validator>=2.1.1",
     "gotrue",
+    "langchain>=0.3.22",
+    "langchain-openai>=0.3.12",
+    "langchain-chroma>=0.2.2",
+    "beautifulsoup4>=4.13.3",
+    "langchain-community>=0.3.20",
 ]
 
 [tool.uv.sources]
 gotrue = { path = "gotrue-2.12.0" }
+
+[tool.uv]
+index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
