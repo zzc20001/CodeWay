@@ -23,6 +23,8 @@ dependencies = [
     "llama-index-readers-github>=0.6.0",
     "ipython>=9.0.2",
     "httpx[socks]>=0.28.1",
+    "langchain-experimental>=0.3.4",
+    "langchain-huggingface>=0.1.2",
 ]
 
 [tool.uv.sources]
