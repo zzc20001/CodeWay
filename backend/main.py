@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 from supabase import create_client, Client, ClientOptions
 from dotenv import load_dotenv
 import httpx
-from typing import Optional, List
+from typing import Optional
 
 # LangChain imports
 from Agent.ReAct import ReActAgent
@@ -13,6 +13,9 @@ from Models.Factory import ChatModelFactory
 from Tools import *
 from Tools.PythonTool import ExcelAnalyser
 from langchain_community.chat_message_histories.in_memory import ChatMessageHistory
+
+# Langfuse 监控支持
+from Utils.LangfuseMonitor import LangfuseMonitor
 
 # Load environment variables
 load_dotenv()
@@ -76,8 +79,11 @@ class GptQueryResponse(BaseModel):
 # Create a dictionary to store chat histories by session_id
 chat_histories = {}
 
+# 初始化 Langfuse 监控
+langfuse_monitor = LangfuseMonitor()
+
 # Initialize LangChain agent
-def get_langchain_agent():
+def get_langchain_agent(callbacks=None):
     # Language model
     llm = ChatModelFactory.get_model("gpt-4o")
     
@@ -96,6 +102,9 @@ def get_langchain_agent():
         ).as_tool()
     ]
     
+    # 获取 Langfuse 回调（如果已启用）
+    base_callbacks = callbacks or []
+    
     # Define agent
     agent = ReActAgent(
         llm=llm,
@@ -103,6 +112,7 @@ def get_langchain_agent():
         work_dir="./data",
         main_prompt_file="./prompts/main/main.txt",
         max_thought_steps=20,
+        callbacks=base_callbacks
     )
     
     return agent
@@ -191,21 +201,45 @@ async def query_gpt(request: GptQueryRequest):
         if session_id not in chat_histories:
             chat_histories[session_id] = ChatMessageHistory()
         
-        # Get the agent
-        agent = get_langchain_agent()
+        # 获取 Langfuse 回调处理程序（如果已启用）
+        langfuse_callbacks = []
+        langfuse_handler = langfuse_monitor.get_langchain_handler(session_id=session_id)
+        if langfuse_handler:
+            langfuse_callbacks = [langfuse_handler]
+        
+        # Get the agent with Langfuse callbacks
+        agent = get_langchain_agent(callbacks=langfuse_callbacks)
         
         # Run the agent with the query
         response = agent.run(
             task=request.query,
             chat_history=chat_histories[session_id],
-            verbose=False
+            verbose=False,
+            session_id=session_id
         )
+        
+        # 确保所有 Langfuse 数据都被刷新
+        if langfuse_handler:
+            langfuse_handler.flush()
         
         return {
             "response": response,
             "session_id": session_id
         }
     except Exception as e:
+        import traceback
+        print(f"Error in query_gpt: {str(e)}")
+        print(traceback.format_exc())
+        
+        # 尝试记录错误到 Langfuse（如果可用）
+        try:
+            handler = langfuse_monitor.get_langchain_handler()
+            if handler:
+                # 如果 Langfuse 可用，记录错误
+                handler.flush()
+        except:
+            pass  # 如果 Langfuse 记录失败，不影响主要错误处理
+        
         raise HTTPException(status_code=500, detail=f"GPT query failed: {str(e)}")
 
 

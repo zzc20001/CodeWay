@@ -25,6 +25,7 @@ dependencies = [
     "httpx[socks]>=0.28.1",
     "langchain-experimental>=0.3.4",
     "langchain-huggingface>=0.1.2",
+    "langfuse>=2.60.2",
 ]
 
 [tool.uv.sources]

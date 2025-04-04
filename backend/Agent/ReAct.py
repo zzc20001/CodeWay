@@ -1,5 +1,5 @@
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict, Any
 
 from langchain_community.chat_message_histories.in_memory import ChatMessageHistory
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -7,12 +7,14 @@ from langchain.output_parsers import PydanticOutputParser, OutputFixingParser
 from langchain.schema.output_parser import StrOutputParser
 from langchain.tools.base import BaseTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import  render_text_description
+from langchain_core.tools import render_text_description
 from pydantic import ValidationError
 from langchain_core.prompts import HumanMessagePromptTemplate
+from langchain_core.callbacks.base import BaseCallbackHandler
 
 from Agent.Action import Action
 from Utils.CallbackHandlers import *
+from Utils.LangfuseMonitor import LangfuseMonitor
 
 
 class ReActAgent:
@@ -42,11 +44,13 @@ class ReActAgent:
             work_dir: str,
             main_prompt_file: str,
             max_thought_steps: Optional[int] = 10,
+            callbacks: Optional[List[BaseCallbackHandler]] = None,
     ):
         self.llm = llm
         self.tools = tools
         self.work_dir = work_dir
         self.max_thought_steps = max_thought_steps
+        self.callbacks = callbacks or []
 
         # OutputFixingParser： 如果输出格式不正确，尝试修复
         self.output_parser = PydanticOutputParser(pydantic_object=Action)
@@ -101,9 +105,13 @@ class ReActAgent:
             "chat_history": chat_history.messages,
         }
 
+        # 合并所有回调，包括主动传入的和基于verbose的
+        all_callbacks = self.callbacks.copy()
+        if verbose:
+            all_callbacks.append(self.verbose_handler)
+            
         config = {
-            "callbacks": [self.verbose_handler]
-            if verbose else []
+            "callbacks": all_callbacks
         }
         response = ""
         for s in self.main_chain.stream(inputs, config=config):
@@ -143,7 +151,9 @@ class ReActAgent:
             self,
             task: str,
             chat_history: ChatMessageHistory,
-            verbose=False
+            verbose=False,
+            session_id: Optional[str] = None,
+            user_id: Optional[str] = None
     ) -> str:
         """
         运行智能体
@@ -158,12 +168,24 @@ class ReActAgent:
         thought_step_count = 0
 
         reply = ""
+        
+        # 如果提供了 session_id 或 user_id，添加 Langfuse 回调
+        run_callbacks = self.callbacks.copy()
+        if session_id or user_id:
+            langfuse_monitor = LangfuseMonitor()
+            langfuse_handler = langfuse_monitor.get_langchain_handler(user_id=user_id, session_id=session_id)
+            if langfuse_handler:
+                run_callbacks.append(langfuse_handler)
 
         # 开始逐步思考
         while thought_step_count < self.max_thought_steps:
             if verbose:
                 self.verbose_handler.on_thought_start(thought_step_count)
 
+            # 临时合并运行时的回调和实例的回调
+            original_callbacks = self.callbacks
+            self.callbacks = run_callbacks
+            
             # 执行一步思考
             action, response = self.__step(
                 task=task,
@@ -171,6 +193,9 @@ class ReActAgent:
                 chat_history=chat_history,
                 verbose=verbose,
             )
+            
+            # 恢复原始回调
+            self.callbacks = original_callbacks
 
             # 如果是结束指令，执行最后一步
             if action.name == "FINISH":
