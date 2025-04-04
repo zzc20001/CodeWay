@@ -1,0 +1,65 @@
+import dotenv
+
+dotenv.load_dotenv()
+import nest_asyncio
+from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI  # 重命名以区分
+from llama_index.core import Settings
+nest_asyncio.apply()
+from llama_index.core import VectorStoreIndex
+from llama_index.readers.github import GithubRepositoryReader, GithubClient
+import os
+from langchain.tools import Tool
+from langchain_openai import ChatOpenAI # 导入正确的 Langchain 类
+from langchain.agents import initialize_agent, AgentType
+
+github_token = os.environ.get("GITHUB_TOKEN")
+openai_api_base = os.environ.get("OPENAI_API_BASE")
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+owner = "stepbystepcode"
+repo = "CodeWay"
+branch = "main"
+docs_folder_path = "docs"
+github_client = GithubClient(github_token=github_token, verbose=True)
+Settings.llm = LlamaIndexOpenAI(model="gpt-4o", temperature=0.2, api_base=openai_api_base, api_key=openai_api_key)
+documents = GithubRepositoryReader(
+    github_client=github_client,
+    owner=owner,
+    repo=repo,
+    use_parser=True,  # Set to True to parse Markdown content into Document objects
+    verbose=False,
+    filter_directories=(
+        [docs_folder_path],
+        GithubRepositoryReader.FilterType.INCLUDE,
+    ),
+    filter_file_extensions=(
+        [".md"],
+        GithubRepositoryReader.FilterType.INCLUDE,
+    ),
+).load_data(branch=branch)
+print(documents)
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine()
+def query_github_docs(query: str) -> str:
+    """使用 LlamaIndex 查询 GitHub 仓库中的文档。"""
+    response = query_engine.query(query)
+    return str(response)
+
+github_docs_tool = Tool(
+    name="github_document_query",
+    func=query_github_docs,
+    description=f"用于查询 GitHub 仓库 {owner}/{repo} 中 {docs_folder_path} 文件夹下的文档内容。",
+)
+
+# --- 5. (可选) 在 Langchain 代理中使用这个工具 ---
+llm = ChatOpenAI(model_name="gpt-4o")  # 使用 ChatOpenAI
+agent = initialize_agent(
+    [github_docs_tool],
+    llm,
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True,
+)
+
+# 现在你可以使用这个代理来查询 GitHub 仓库的文档
+query = "使用 'github_document_query' 工具来确定这是一个使用_____编写的_____文档？请用2个词回答填空部分。"
+response = agent.run(query)
+print(f"\n代理的回答: {response}")
