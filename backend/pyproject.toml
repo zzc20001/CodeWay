@@ -17,6 +17,11 @@ dependencies = [
     "langchain-chroma>=0.2.2",
     "beautifulsoup4>=4.13.3",
     "langchain-community>=0.3.20",
+    "dotenv>=0.9.9",
+    "nest-asyncio>=1.6.0",
+    "llama-index>=0.12.28",
+    "llama-index-readers-github>=0.6.0",
+    "ipython>=9.0.2",
 ]
 
 [tool.uv.sources]
