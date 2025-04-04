@@ -8,14 +8,13 @@ dotenv.load_dotenv()
 # Apply nest_asyncio early if needed by underlying libraries
 nest_asyncio.apply()
 
-from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
 from llama_index.core.callbacks import CallbackManager # Import CallbackManager
 
 from langchain.tools import Tool
 from langchain_openai import ChatOpenAI
-from langchain.agents import initialize_agent, AgentType, AgentExecutor # AgentExecutor is often preferred
+from langchain.agents import initialize_agent, AgentType
 
 # Import Langfuse handlers
 from langfuse.callback import CallbackHandler as LangfuseLangchainCallbackHandler # Rename for clarity
@@ -67,21 +66,7 @@ docs_folder_path = "docs"
 
 # Configure LlamaIndex Settings with LLM and Callback Manager (including Langfuse)
 mode="local"
-# if mode == "local":
-#     Settings.llm = LlamaIndexOpenAI(
-#         model="LLM-Research/gemma-3-27b-it",
-#         temperature=0.2,
-#         api_base=local_api_base,
-#         api_key=local_api_key
-#     )
-# else:
-#     Settings.llm = LlamaIndexOpenAI(
-#         model="gpt-4o",
-#         temperature=0.2,
-#         api_base=openai_api_base, # Pass api_base if set
-#         api_key=openai_api_key
-# )
-# Integrate Langfuse Handler into LlamaIndex Settings
+
 Settings.callback_manager = CallbackManager([langfuse_llama_index_handler])
 
 # Initialize Github Client and Reader
@@ -178,8 +163,8 @@ agent_executor = initialize_agent( # initialize_agent returns an AgentExecutor
 
 
 # --- 6. Execute the Agent with Langfuse Tracing ---
-query = "Use the 'github_document_query' tool to determine what language and format this documentation is primarily written in. Answer with exactly two words."
-# query = "使用 'github_document_query' 工具来确定这是一个使用_____编写的_____文档？请用2个词回答填空部分。" # Original query in Chinese
+# query = "Use the 'github_document_query' tool to determine what language and format this documentation is primarily written in. Answer with exactly two words."
+query = "使用 'github_document_query' 工具来确定这是一个使用_____编写的_____文档？请用2个词回答填空部分。" # Original query in Chinese
 
 print(f"\nExecuting agent with query: \"{query}\"")
 
