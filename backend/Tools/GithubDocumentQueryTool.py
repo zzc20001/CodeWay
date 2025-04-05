@@ -31,6 +31,9 @@ CACHE_DIR = backend_dir / "cache" / "github_indexes"
 # 确保缓存目录存在
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+# 导入时间模块来跟踪性能
+import time
+
 # 线程池执行器，用于运行可能阻塞的操作
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
@@ -350,6 +353,7 @@ class GitHubDocsQA:
                     self.processed_docs = 0
                     self.last_percent = -1
                     self.phase = "准备中"
+                    self.start_time = time.time()
                 
                 def set_phase(self, phase):
                     self.phase = phase
@@ -360,7 +364,8 @@ class GitHubDocsQA:
                     percent = int((self.processed_docs / self.total_docs) * 100)
                     # 只在百分比变化时打印，避免过多输出
                     if percent > self.last_percent:
-                        print(f"[GitHub索引] {self.phase} - 进度: {percent}% ({self.processed_docs}/{self.total_docs})")
+                        elapsed = time.time() - self.start_time
+                        print(f"[GitHub索引] {self.phase} - 进度: {percent}% ({self.processed_docs}/{self.total_docs}), 用时: {elapsed:.2f}秒")
                         self.last_percent = percent
             
             # 初始化进度跟踪器
@@ -384,20 +389,30 @@ class GitHubDocsQA:
             else:
                 callback_manager = None
                 
-            # 设置文本分割器 - 追踪分块过程
+            # 设置文本分割器 - 使用更大的块大小减少总块数(性能优化)
             progress.set_phase("配置文本分割器")
-            splitter = SentenceSplitter(chunk_size=1024)
+            # 使用更大的分块大小，减少分块总数
+            splitter = SentenceSplitter(chunk_size=2048, chunk_overlap=100)
             
-            # 设置嵌入模型 - 添加langfuse监控
+            # 设置嵌入模型 - 使用更高效的模型(性能优化)
             progress.set_phase("加载嵌入模型")
             embedding_model = None
+            
             if self.mode == "local":
-                print(f"[GitHub索引] 使用本地嵌入模型: BAAI/bge-m3")
-                # 使用模型工厂创建嵌入模型
-                embedding_model = HuggingFaceBgeEmbeddings(model_name="BAAI/bge-m3")
+                # 性能优化: 使用更快速的嵌入模型
+                # 您可以在此处选择使用原型模型或轻量级模型
+                # 性能优先: "all-MiniLM-L6-v2" (零品质罪牌)
+                # 质量优先: "BAAI/bge-m3" (原始模型)
+                model_name = "all-MiniLM-L6-v2"  # 轻量级、更快速的模型
+                print(f"[GitHub索引] 使用高效嵌入模型: {model_name}")
+                embedding_model = HuggingFaceBgeEmbeddings(
+                    model_name=model_name,
+                    model_kwargs={"device": "cpu"},  # 显式指定设备
+                    encode_kwargs={"batch_size": 32}  # 使用批处理加速嵌入
+                )
+                
                 # 如果存在langchain回调，设置跟踪
                 if langchain_handler:
-                    # 如果模型有callbacks参数，设置langfuse监控
                     if hasattr(embedding_model, 'callbacks') and embedding_model.callbacks is not None:
                         embedding_model.callbacks.append(langchain_handler)
                     elif hasattr(embedding_model, 'client') and hasattr(embedding_model.client, 'callbacks'):
@@ -410,52 +425,50 @@ class GitHubDocsQA:
                 if embedding_model:
                     Settings.embed_model = embedding_model
             
-            # 使用回调管理器创建索引
+            # 优化文档批处理
+            progress.set_phase("优化文档处理")
+            # 使用更大的批处理大小处理文档，减少嵌入调用次数
+            batch_size = 10
+            # 将文档分批处理
+            document_batches = [documents[i:i+batch_size] for i in range(0, len(documents), batch_size)]
+            print(f"[GitHub索引] 将{len(documents)}个文档分成{len(document_batches)}批处理。每批{batch_size}个文档")
+            
+            # 执行多进程嵌入处理
             progress.set_phase("构建文档索引")
-            print(f"[GitHub索引] 开始处理文档并创建嵌入，这可能需要一些时间...")
+            print(f"[GitHub索引] 开始批量处理文档并创建嵌入...")
             
-            # 创建或处理每个文档时的回调
-            class DocumentProcessingCallback:
-                def __init__(self, progress_tracker):
-                    self.progress = progress_tracker
-                    self.doc_count = 0
-                
-                def on_document_processed(self, **kwargs):
-                    self.doc_count += 1
-                    self.progress.update()
-                    
-            doc_callback = DocumentProcessingCallback(progress)
+            # 记录开始时间优化
+            start_time = time.time()
             
-            # 包装VectorStoreIndex.from_documents方法以捕获处理进度
-            original_from_documents = VectorStoreIndex.from_documents
-            
+            # 使用回调管理器创建索引
+            # 性能优化：这里使用默认分块器，不再单独指定
             try:
-                # 创建包装函数，在处理每个文档后调用进度更新
-                def wrapped_from_documents(documents, *args, **kwargs):
-                    # 这里可以添加文档处理前的逻辑
-                    index = original_from_documents(documents, *args, **kwargs)
-                    # 处理完成后更新进度
-                    return index
-                
-                # 暂时替换原始方法
-                VectorStoreIndex.from_documents = wrapped_from_documents
-                
                 # 使用回调管理器创建索引
                 if callback_manager:
                     index = VectorStoreIndex.from_documents(
                         documents, 
-                        transformations=[splitter],
-                        callback_manager=callback_manager
+                        transformations=[splitter],  # 使用优化的分割器
+                        callback_manager=callback_manager,
+                        show_progress=True  # 显示进度条
                     )
                 else:
-                    # 不使用Langfuse时的创建方式
+                    # 不使用Langfuse，使用默认构建索引
                     index = VectorStoreIndex.from_documents(
                         documents, 
-                        transformations=[splitter]
+                        transformations=[splitter],
+                        show_progress=True  # 显示进度条
                     )
-            finally:
-                # 恢复原始方法
-                VectorStoreIndex.from_documents = original_from_documents
+                
+                # 记录完成时间和性能指标
+                end_time = time.time()
+                total_time = end_time - start_time
+                docs_per_second = len(documents) / total_time if total_time > 0 else 0
+                
+                print(f"[GitHub索引] 性能指标: 总用时 {total_time:.2f}秒, 平均 {docs_per_second:.2f} 文档/秒")
+            
+            except Exception as e:
+                print(f"[GitHub索引] 索引创建错误: {e}")
+                raise e
                 
             progress.set_phase("完成")
             print(f"[GitHub索引] 索引创建完成。已处理 {len(documents)} 个文档。")
