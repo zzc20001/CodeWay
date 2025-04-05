@@ -29,6 +29,9 @@ dependencies = [
     "llama-index-embeddings-langchain>=0.3.0",
 ]
 
+[tool.setuptools]
+packages = ["Agent", "Models", "prompts", "Tools", "Utils"] 
+
 [tool.uv.sources]
 gotrue = { path = "gotrue-2.12.0" }
 
