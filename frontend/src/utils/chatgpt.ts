@@ -95,6 +95,40 @@ export const streamChatGptRequest = async (
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
 
+    // 处理非流式响应（可能是因为服务器不支持流式响应）
+    try {
+      const data = await response.json();
+      
+      // 如果服务器返回的是JSON对象，则处理它
+      // 检查是否有response或answer字段
+      const content = data.response || data.answer || JSON.stringify(data);
+      
+      // 创建一个模拟块
+      const mockChunk: ChatCompletionChunk = {
+        id: `chunk-${Date.now()}`,
+        object: 'chat.completion.chunk',
+        created: Date.now(),
+        model: requestData.model || 'gemma3',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: content
+            },
+            finish_reason: 'stop'
+          }
+        ]
+      };
+      
+      // 发送内容并完成
+      onChunk(mockChunk);
+      onComplete();
+      return;
+    } catch (e) {
+      // 如果不是JSON，则尝试流式处理
+      // 继续处理流式响应
+    }
+
     if (!response.body) {
       throw new Error('Response body is null');
     }
@@ -102,8 +136,7 @@ export const streamChatGptRequest = async (
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     
-    // 用于生成唯一ID的时间戳
-    const timestamp = Date.now();
+    let responseText = '';
     let done = false;
     
     // 直接读取流
@@ -112,16 +145,44 @@ export const streamChatGptRequest = async (
       done = doneReading;
 
       if (done) {
+        // 尝试将完整响应解析为JSON
+        try {
+          const jsonResponse = JSON.parse(responseText);
+          const finalContent = jsonResponse.response || jsonResponse.answer || responseText;
+          
+          // 发送最终的内容
+          const finalChunk: ChatCompletionChunk = {
+            id: `chunk-final-${Date.now()}`,
+            object: 'chat.completion.chunk',
+            created: Date.now(),
+            model: requestData.model || 'gemma3',
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  content: finalContent
+                },
+                finish_reason: 'stop'
+              }
+            ]
+          };
+          
+          onChunk(finalChunk);
+        } catch (e) {
+          // 如果不是JSON，就使用原始文本
+        }
+        
         onComplete();
         break;
       }
 
       // 解码这个块
       const chunk = decoder.decode(value, { stream: true });
+      responseText += chunk;
       
       // 为了兼容现有前端代码，将文本块转换为ChatGPT风格的块
       const mockChunk: ChatCompletionChunk = {
-        id: `chunk-${timestamp}-${Math.random().toString(36).substring(2, 9)}`,
+        id: `chunk-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         object: 'chat.completion.chunk',
         created: Date.now(),
         model: requestData.model || 'gemma3',
