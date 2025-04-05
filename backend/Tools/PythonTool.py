@@ -97,7 +97,7 @@ class ExcelAnalyser:
 
 if __name__ == "__main__":
     print(ExcelAnalyser(
-        ChatModelFactory.get_model("gpt-4o"),
+        ChatModelFactory.get_model("gemma3"),
     ).analyse(
         query="8月销售额",
         filename="../data/2023年8月-9月销售记录.xlsx"

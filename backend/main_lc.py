@@ -114,7 +114,7 @@ def run_agent(agent, tools):
 
 def main():
     # 语言模型
-    llm = ChatModelFactory.get_model("gpt-4o")
+    llm = ChatModelFactory.get_model("gemma3")
 
     # 自定义工具集
     tools = [

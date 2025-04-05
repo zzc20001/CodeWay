@@ -49,7 +49,7 @@ def ask_docment(
     documents = text_splitter.split_documents(raw_docs)
     if documents is None or len(documents) == 0:
         return "无法读取文档内容"
-    db = Chroma.from_documents(documents, EmbeddingModelFactory.get_default_model())
+    db = Chroma.from_documents(documents, EmbeddingModelFactory.get_model(model_name="bge-m3"))
     qa_chain = RetrievalQA.from_chain_type(
         llm=ChatModelFactory.get_default_model(),  # 语言模型
         chain_type="stuff",  # prompt的组织方式

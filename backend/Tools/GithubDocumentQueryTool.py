@@ -1,19 +1,13 @@
-from typing import List, Optional
 import os
 import asyncio
 import concurrent.futures
 from functools import partial
 import pathlib
 from dotenv import load_dotenv
-from llama_index.llms.openai import OpenAI as LlamaIndexOpenAI
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
 from llama_index.core.callbacks import CallbackManager
 from langchain.tools import Tool
-from langchain_openai import ChatOpenAI
-from langchain.agents import initialize_agent, AgentType
-from langchain.schema import Document
-from Models.Factory import ChatModelFactory, EmbeddingModelFactory
 from llama_index.core.node_parser import SentenceSplitter
 from langchain.embeddings.huggingface import HuggingFaceBgeEmbeddings
 
@@ -71,23 +65,6 @@ class GitHubDocsQA:
             except Exception as e:
                 print(f"创建索引时出错: {e}")
                 self.query_engine = None
-        
-    # def _setup_llama_index(self):
-        """Configure LlamaIndex settings."""
-        # if self.mode == "local":
-        #     Settings.llm = LlamaIndexOpenAI(
-        #         model="LLM-Research/gemma-3-27b-it",
-        #         temperature=0.2,
-        #         api_base=self.local_api_base,
-        #         api_key="no-key-required"  # Some local models don't need keys
-        #     )
-        # else:
-        #     Settings.llm = LlamaIndexOpenAI(
-        #         model="gpt-4o",
-        #         temperature=0.2,
-        #         api_base=self.openai_api_base,
-        #         api_key=self.openai_api_key
-        #     )
     
     def _load_documents_sync(self):
         """Synchronously load documents from GitHub repository."""
@@ -154,7 +131,7 @@ class GitHubDocsQA:
             embedding_model = None
             if self.mode == "local":
                 # 使用模型工厂创建嵌入模型
-                embedding_model = EmbeddingModelFactory.get_default_model()
+                embedding_model = HuggingFaceBgeEmbeddings(model_name="BAAI/bge-m3")
                 # 如果存在langchain回调，设置跟踪
                 if langchain_handler:
                     # 如果模型有callbacks参数，设置langfuse监控
@@ -280,10 +257,6 @@ def ask_github_docs(
         branch: Branch to use
         docs_folder_path: Path to docs folder in repository
         mode: "local" or other for model selection
-        local_api_base: Base URL for local model API
-        openai_api_base: Base URL for OpenAI API
-        openai_api_key: OpenAI API key
-        github_token: GitHub access token
         
     Returns:
         str: The answer to the query

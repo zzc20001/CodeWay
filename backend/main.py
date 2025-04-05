@@ -21,6 +21,9 @@ from Utils.LangfuseMonitor import LangfuseMonitor
 # Load environment variables
 load_dotenv()
 
+mode = os.environ.get("MODE")
+if mode == "local":
+    os.environ["OPENAI_API_BASE"] = os.environ.get("LOCAL_API_BASE")
 app = FastAPI()
 # Configure CORS
 app.add_middleware(
@@ -94,12 +97,12 @@ def get_langchain_agent():
     required_vars = ["OPENAI_API_KEY", "OPENAI_API_BASE", "LOCAL_API_BASE", "GITHUB_TOKEN"]
     for var in required_vars:
         print(f"  {var}: {'✅ Set' if os.environ.get(var) else '❌ Not set'}")
-    
+
     # Create model with more explicit error handling
     try:
         # Use a safer default model configuration
         llm = ChatOpenAI(
-            model_name="gpt-4o",  # Use a more reliable model
+            model_name="gemma3",  # Use a more reliable model
             temperature=0.2,
             request_timeout=60,  # Longer timeout
         )
