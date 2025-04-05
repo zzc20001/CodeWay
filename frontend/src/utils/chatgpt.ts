@@ -1,6 +1,19 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-// Types
+// 后端API请求类型
+export type BackendApiRequest = {
+  query: string;
+  session_id?: string;
+  mode?: string;
+};
+
+// 后端API响应类型
+export type BackendApiResponse = {
+  answer: string;
+  session_id: string;
+};
+
+// 为了兼容现有代码，保留OpenAI风格的类型定义
 export type ChatCompletionRequest = {
   model: string;
   messages: {
@@ -10,6 +23,7 @@ export type ChatCompletionRequest = {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  session_id?: string; // 添加session_id字段用于传递给后端
 };
 
 export type ChatCompletionResponse = {
@@ -46,31 +60,6 @@ export type ChatCompletionChunk = {
     finish_reason: string | null;
   }[];
 };
-
-// API function to send regular (non-streaming) requests to ChatGPT
-export const sendChatGptRequest = async (
-  requestData: ChatCompletionRequest
-): Promise<ChatCompletionResponse> => {
-  const response = await fetch(`${import.meta.env.VITE_OPENAI_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY || ''}`,
-    },
-    body: JSON.stringify({
-      ...requestData,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error?.message || 'Failed to get response from ChatGPT');
-  }
-
-  return response.json();
-};
-
 // API function to send streaming requests to ChatGPT
 export const streamChatGptRequest = async (
   requestData: ChatCompletionRequest,
@@ -79,21 +68,31 @@ export const streamChatGptRequest = async (
   onComplete: () => void
 ): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_OPENAI_BASE_URL}/chat/completions`, {
+    // 从ChatGPT风格的请求中提取最后一条用户消息作为查询
+    const lastUserMessage = [...requestData.messages].reverse().find(msg => msg.role === 'user');
+    
+    if (!lastUserMessage) {
+      throw new Error('No user message found in the request');
+    }
+
+    // 构建后端API请求
+    const backendRequest: BackendApiRequest = {
+      query: lastUserMessage.content,
+      session_id: requestData.session_id,
+      mode: 'local' // 默认使用本地模型
+    };
+
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/gpt`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY || ''}`,
       },
-      body: JSON.stringify({
-        ...requestData,
-        stream: true,
-      }),
+      body: JSON.stringify(backendRequest),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Failed to get streaming response from ChatGPT');
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
 
     if (!response.body) {
@@ -103,66 +102,46 @@ export const streamChatGptRequest = async (
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     
-    let buffer = '';
+    // 用于生成唯一ID的时间戳
+    const timestamp = Date.now();
+    let done = false;
+    
+    // 直接读取流
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
 
-    const readChunk = async (): Promise<void> => {
-      const { done, value } = await reader.read();
-      
       if (done) {
         onComplete();
-        return;
+        break;
       }
+
+      // 解码这个块
+      const chunk = decoder.decode(value, { stream: true });
       
-      // Decode the chunk and add it to our buffer
-      buffer += decoder.decode(value, { stream: true });
-      
-      // Process each line in the buffer
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // The last line might be incomplete
-      
-      for (const line of lines) {
-        if (line.trim() === '') continue;
-        
-        // SSE format: lines starting with "data: "
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6); // Remove "data: " prefix
-          
-          // The "data: [DONE]" message indicates the end of the stream
-          if (data === '[DONE]') {
-            onComplete();
-            return;
+      // 为了兼容现有前端代码，将文本块转换为ChatGPT风格的块
+      const mockChunk: ChatCompletionChunk = {
+        id: `chunk-${timestamp}-${Math.random().toString(36).substring(2, 9)}`,
+        object: 'chat.completion.chunk',
+        created: Date.now(),
+        model: requestData.model || 'gemma3',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: chunk
+            },
+            finish_reason: null
           }
-          
-          try {
-            const chunk = JSON.parse(data) as ChatCompletionChunk;
-            onChunk(chunk);
-          } catch (e) {
-            console.error('Error parsing SSE chunk:', e);
-          }
-        }
-      }
+        ]
+      };
       
-      // Continue reading
-      return readChunk();
-    };
-    
-    await readChunk();
+      // 将这个模拟块传递给回调
+      onChunk(mockChunk);
+    }
   } catch (error) {
     onError(error instanceof Error ? error : new Error(String(error)));
   }
-};
-
-// Custom hook using React Query's useMutation for ChatGPT requests
-export const useChatGptMutation = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: sendChatGptRequest,
-    onSuccess: () => {
-      // Example of using queryClient - you can customize this based on your needs
-      queryClient.invalidateQueries({ queryKey: ['chatHistory'] });
-    },
-  });
 };
 
 // Custom hook for streaming ChatGPT responses

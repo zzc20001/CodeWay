@@ -21,9 +21,7 @@ from Utils.LangfuseMonitor import LangfuseMonitor
 # Load environment variables
 load_dotenv()
 
-mode = os.environ.get("MODE")
-if mode == "local":
-    os.environ["OPENAI_API_BASE"] = os.environ.get("LOCAL_API_BASE")
+
 app = FastAPI()
 # Configure CORS
 app.add_middleware(
@@ -72,6 +70,7 @@ class AuthResponse(BaseModel):
 
 class GptQueryRequest(BaseModel):
     query: str
+    mode: str = "local"
     session_id: Optional[str] = Field(default=None, description="Session ID for maintaining conversation context")
 
 
@@ -218,6 +217,9 @@ async def verify(verify_data: VerifyRequest, supabase: Client = Depends(get_supa
 @app.post("/api/gpt", response_model=GptQueryResponse)
 async def query_gpt(request: GptQueryRequest):
     try:
+        mode = request.mode
+        if mode == "local":
+            os.environ["OPENAI_API_BASE"] = os.environ.get("LOCAL_API_BASE")
         # Generate a random session ID if not provided
         session_id = request.session_id or f"session_{len(chat_histories) + 1}"
         
