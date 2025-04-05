@@ -148,6 +148,7 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langfuse" },
     { name = "llama-index" },
+    { name = "llama-index-embeddings-langchain" },
     { name = "llama-index-readers-github" },
     { name = "nest-asyncio" },
     { name = "pydantic" },
@@ -173,6 +174,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=0.3.12" },
     { name = "langfuse", specifier = ">=2.60.2" },
     { name = "llama-index", specifier = ">=0.12.28" },
+    { name = "llama-index-embeddings-langchain", specifier = ">=0.3.0" },
     { name = "llama-index-readers-github", specifier = ">=0.6.0" },
     { name = "nest-asyncio", specifier = ">=1.6.0" },
     { name = "pydantic", specifier = ">=2.7.0" },
@@ -1437,6 +1439,18 @@ dependencies = [
 sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/67/de/64a7bb9420f40b13375424c5601347245b601377a69f7f5fcff6e4c0667f/llama_index_core-0.12.28.tar.gz", hash = "sha256:bf4a9697525e1294855d2df5c3a56b9720c185cde0eae2da713e7629c456c643", size = 1358078 }
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/88/bd/22df65f32d512355ce522ed63a95a4e7710ee3ec68120b7187f030b94b95/llama_index_core-0.12.28-py3-none-any.whl", hash = "sha256:9bd24224bd57dd5e97bb0a2550f31f6c08b7dc396305f35bbe9714d17b1409a6", size = 1621039 },
+]
+
+[[package]]
+name = "llama-index-embeddings-langchain"
+version = "0.3.0"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+]
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/f0/16/75abcc42aa9b5409405690063d230d36cf58a076637ed1cf621cef1812a4/llama_index_embeddings_langchain-0.3.0.tar.gz", hash = "sha256:b8b092e2e79a0cb62d97b065d83d4e4fe42523dfe9acafc9ada3deac2a1998a6", size = 2251 }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/86/fe/5fb90836699bbf10af4e84bd36c20ebd32d99339fc61449e558844f87106/llama_index_embeddings_langchain-0.3.0-py3-none-any.whl", hash = "sha256:0babab3a764e3beb28ba8d2ff858f48b4f1ac25e4a2dbc1737801091205951eb", size = 2519 },
 ]
 
 [[package]]

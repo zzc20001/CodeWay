@@ -26,6 +26,7 @@ dependencies = [
     "langchain-experimental>=0.3.4",
     "langchain-huggingface>=0.1.2",
     "langfuse>=2.60.2",
+    "llama-index-embeddings-langchain>=0.3.0",
 ]
 
 [tool.uv.sources]

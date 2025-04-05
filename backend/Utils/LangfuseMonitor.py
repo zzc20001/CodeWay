@@ -35,7 +35,7 @@ class LangfuseMonitor:
         # 从环境变量获取 Langfuse 凭据
         self.langfuse_public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
         self.langfuse_secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
-        self.langfuse_host = os.environ.get("LANGFUSE_HOST")
+        self.langfuse_host = os.environ.get("LANGFUSE_HOST", "http://10.114.0.65:3000")
         
         # 验证是否设置了必要的凭据
         if not self.langfuse_public_key or not self.langfuse_secret_key:

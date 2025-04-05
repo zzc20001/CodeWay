@@ -128,7 +128,8 @@ def main():
             llm=llm,
             prompt_file="./prompts/tools/excel_analyser.txt",
             verbose=True
-        ).as_tool()
+        ).as_tool(),
+        github_document_query_tool
     ]
 
     parser = MyAgentOutputParser()

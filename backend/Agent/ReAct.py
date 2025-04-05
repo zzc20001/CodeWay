@@ -65,6 +65,8 @@ class ReActAgent:
         self.__init_chains()
 
         self.verbose_handler = ColoredPrintHandler(color=THOUGHT_COLOR)
+        print("Tools:")
+        print(self.tools)
 
     def __init_prompt_templates(self):
         with open(self.main_prompt_file, 'r', encoding='utf-8') as f:
@@ -114,8 +116,14 @@ class ReActAgent:
             "callbacks": all_callbacks
         }
         response = ""
+        chunk_received = False
         for s in self.main_chain.stream(inputs, config=config):
             response += s
+            chunk_received = True
+        
+        # If no chunks were returned, handle the error gracefully
+        if not chunk_received:
+            return Action(name="FINISH", args={"response": "抱歉，处理请求时发生错误：模型未返回任何内容。可能是网络连接问题或模型服务暂时不可用。请稍后再试。"}), "No generation chunks were returned"
         # 提取JSON代码块
         json_action = self.__extract_json_action(response)
         # 带容错的解析
@@ -153,13 +161,17 @@ class ReActAgent:
             chat_history: ChatMessageHistory,
             verbose=False,
             session_id: Optional[str] = None,
-            user_id: Optional[str] = None
+            user_id: Optional[str] = None,
+            callbacks: Optional[List[BaseCallbackHandler]] = None
     ) -> str:
         """
         运行智能体
         :param task: 用户任务
         :param chat_history: 对话上下文（长时记忆）
         :param verbose: 是否显示详细信息
+        :param session_id: 可选的会话ID，用于Langfuse跟踪
+        :param user_id: 可选的用户ID，用于Langfuse跟踪
+        :param callbacks: 外部提供的回调处理程序列表
         """
         # 初始化短时记忆: 记录推理过程
         short_term_memory = []
@@ -169,9 +181,15 @@ class ReActAgent:
 
         reply = ""
         
-        # 如果提供了 session_id 或 user_id，添加 Langfuse 回调
+        # 合并所有回调处理程序
         run_callbacks = self.callbacks.copy()
-        if session_id or user_id:
+        
+        # 添加外部提供的回调
+        if callbacks:
+            run_callbacks.extend(callbacks)
+            
+        # 如果提供了 session_id 或 user_id 但没有提供外部回调，尝试创建 Langfuse 回调
+        if (session_id or user_id) and not callbacks:
             langfuse_monitor = LangfuseMonitor()
             langfuse_handler = langfuse_monitor.get_langchain_handler(user_id=user_id, session_id=session_id)
             if langfuse_handler:

@@ -13,6 +13,7 @@ from Models.Factory import ChatModelFactory
 from Tools import *
 from Tools.PythonTool import ExcelAnalyser
 from langchain_community.chat_message_histories.in_memory import ChatMessageHistory
+from langchain_openai import ChatOpenAI
 
 # Langfuse 监控支持
 from Utils.LangfuseMonitor import LangfuseMonitor
@@ -83,39 +84,59 @@ chat_histories = {}
 langfuse_monitor = LangfuseMonitor()
 
 # Initialize LangChain agent
-def get_langchain_agent(callbacks=None):
-    # Language model
-    llm = ChatModelFactory.get_model("gpt-4o")
+def get_langchain_agent():
+    # Ensure environment variables are properly loaded
+    from dotenv import load_dotenv
+    load_dotenv()
     
-    # Custom tools
+    # Print debug info about available environment variables (without showing the actual values)
+    print("Available environment variables:")
+    required_vars = ["OPENAI_API_KEY", "OPENAI_API_BASE", "LOCAL_API_BASE", "GITHUB_TOKEN"]
+    for var in required_vars:
+        print(f"  {var}: {'✅ Set' if os.environ.get(var) else '❌ Not set'}")
+    
+    # Create model with more explicit error handling
+    try:
+        # Use a safer default model configuration
+        llm = ChatOpenAI(
+            model_name="gpt-4o",  # Use a more reliable model
+            temperature=0.2,
+            request_timeout=60,  # Longer timeout
+        )
+        print("LLM initialized successfully")
+    except Exception as e:
+        print(f"Error initializing LLM: {str(e)}")
+        # Fallback to a very simple configuration
+        llm = ChatOpenAI(temperature=0)
+    
+    # Use a minimal set of tools to reduce potential errors
     tools = [
-        document_qa_tool,
-        document_generation_tool,
-        email_tool,
-        excel_inspection_tool,
-        directory_inspection_tool,
-        finish_placeholder,
-        ExcelAnalyser(
-            llm=llm,
-            prompt_file="./prompts/tools/excel_analyser.txt",
-            verbose=True
-        ).as_tool()
+        finish_placeholder,  # Always include the finish tool
     ]
     
-    # 获取 Langfuse 回调（如果已启用）
-    base_callbacks = callbacks or []
+    # Add optional tools if they're available and properly initialized
+    try:
+        tools.append(document_qa_tool)
+        tools.append(document_generation_tool)
+        tools.append(github_document_query_tool)
+        print("Document tools loaded successfully")
+    except Exception as e:
+        print(f"Error loading document tools: {str(e)}")
     
-    # Define agent
-    agent = ReActAgent(
-        llm=llm,
-        tools=tools,
-        work_dir="./data",
-        main_prompt_file="./prompts/main/main.txt",
-        max_thought_steps=20,
-        callbacks=base_callbacks
-    )
-    
-    return agent
+    # Define agent with more explicit error handling
+    try:
+        agent = ReActAgent(
+            llm=llm,
+            tools=tools,
+            work_dir="./data",
+            main_prompt_file="./prompts/main/main.txt",
+            max_thought_steps=5,  # Reduce max steps for initial testing
+        )
+        print("Agent initialized successfully")
+        return agent
+    except Exception as e:
+        print(f"Error initializing agent: {str(e)}")
+        raise
 
 
 @app.get("/")
@@ -197,49 +218,61 @@ async def query_gpt(request: GptQueryRequest):
         # Generate a random session ID if not provided
         session_id = request.session_id or f"session_{len(chat_histories) + 1}"
         
+        # 初始化Langfuse监控
+        langfuse_monitor = LangfuseMonitor()
+        langfuse_handler = langfuse_monitor.get_langchain_handler(session_id=session_id)
+        
+        # 创建回调列表，如果Langfuse启用，则包含Langfuse处理程序
+        callbacks = []
+        if langfuse_handler:
+            callbacks.append(langfuse_handler)
+        
         # Get or create chat history for this session
         if session_id not in chat_histories:
             chat_histories[session_id] = ChatMessageHistory()
         
-        # 获取 Langfuse 回调处理程序（如果已启用）
-        langfuse_callbacks = []
-        langfuse_handler = langfuse_monitor.get_langchain_handler(session_id=session_id)
-        if langfuse_handler:
-            langfuse_callbacks = [langfuse_handler]
-        
-        # Get the agent with Langfuse callbacks
-        agent = get_langchain_agent(callbacks=langfuse_callbacks)
-        
-        # Run the agent with the query
-        response = agent.run(
-            task=request.query,
-            chat_history=chat_histories[session_id],
-            verbose=False,
-            session_id=session_id
-        )
-        
-        # 确保所有 Langfuse 数据都被刷新
-        if langfuse_handler:
-            langfuse_handler.flush()
-        
-        return {
-            "response": response,
-            "session_id": session_id
-        }
+        try:
+            # Get the agent
+            agent = get_langchain_agent()
+            
+            # Log the query
+            print(f"Processing query: {request.query[:50]}...")
+            
+            # Run the agent with the query，添加Langfuse回调
+            response = agent.run(
+                task=request.query,
+                chat_history=chat_histories[session_id],
+                verbose=True,  # Enable verbose output for debugging
+                session_id=session_id,  # 传递会话ID
+                user_id=None,  # 可选：如果有用户ID也可以传递
+                callbacks=callbacks  # 传递Langfuse回调
+            )
+            
+            return {
+                "response": response,
+                "session_id": session_id
+            }
+            
+        except Exception as agent_error:
+            # If agent execution fails, provide a fallback response
+            error_message = str(agent_error)
+            print(f"Agent execution error: {error_message}")
+            
+            # Provide a more user-friendly message for the streaming error
+            if "No generation chunks were returned" in error_message:
+                response_message = "抱歉，处理请求时发生错误：模型未返回任何内容。可能是网络连接问题或模型服务暂时不可用。请稍后再试。"
+            else:
+                response_message = f"抱歉，处理请求时发生问题: {error_message}"
+                
+            return {
+                "response": response_message,
+                "session_id": session_id
+            }
+            
     except Exception as e:
         import traceback
         print(f"Error in query_gpt: {str(e)}")
         print(traceback.format_exc())
-        
-        # 尝试记录错误到 Langfuse（如果可用）
-        try:
-            handler = langfuse_monitor.get_langchain_handler()
-            if handler:
-                # 如果 Langfuse 可用，记录错误
-                handler.flush()
-        except:
-            pass  # 如果 Langfuse 记录失败，不影响主要错误处理
-        
         raise HTTPException(status_code=500, detail=f"GPT query failed: {str(e)}")
 
 

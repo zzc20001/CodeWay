@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv, find_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings, AzureChatOpenAI, AzureOpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_huggingface import  HuggingFaceEndpoint
 openai_api_base = os.environ.get("OPENAI_API_BASE") # Optional: if using a proxy/custom base
 openai_api_key = os.environ.get("OPENAI_API_KEY")

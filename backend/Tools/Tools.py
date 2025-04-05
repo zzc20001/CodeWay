@@ -8,6 +8,7 @@ from .EmailTool import send_email
 from .ExcelTool import get_first_n_rows
 from .FileTool import list_files_in_directory
 from .FinishTool import finish
+from .GithubDocumentQueryTool import ask_github_docs
 
 document_qa_tool = StructuredTool.from_function(
     func=ask_docment,
@@ -43,4 +44,10 @@ finish_placeholder = StructuredTool.from_function(
     func=finish,
     name="FINISH",
     description="结束任务，将最终答案返回"
+)
+
+github_document_query_tool = StructuredTool.from_function(
+    func=ask_github_docs,
+    name="github_document_query",
+    description="查询github上的文档内容，回答问题。使用此工具获取GitHub仓库中文档的内容和格式信息。"
 )
