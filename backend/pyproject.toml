@@ -4,4 +4,36 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.115.12",
+    "granian>=2.2.0",
+    "supabase>=2.3.2",
+    "python-dotenv>=1.0.1",
+    "pydantic>=2.7.0",
+    "email-validator>=2.1.1",
+    "gotrue",
+    "langchain>=0.3.22",
+    "langchain-openai>=0.3.12",
+    "langchain-chroma>=0.2.2",
+    "beautifulsoup4>=4.13.3",
+    "langchain-community>=0.3.20",
+    "dotenv>=0.9.9",
+    "nest-asyncio>=1.6.0",
+    "llama-index>=0.12.28",
+    "llama-index-readers-github>=0.6.0",
+    "ipython>=9.0.2",
+    "httpx[socks]>=0.28.1",
+    "langchain-experimental>=0.3.4",
+    "langchain-huggingface>=0.1.2",
+    "langfuse>=2.60.2",
+    "llama-index-embeddings-langchain>=0.3.0",
+]
+
+[tool.setuptools]
+packages = ["Agent", "Models", "prompts", "Tools", "Utils"] 
+
+[tool.uv.sources]
+gotrue = { path = "gotrue-2.12.0" }
+
+[tool.uv]
+index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

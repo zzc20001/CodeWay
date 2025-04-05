@@ -8,3 +8,8 @@ wheels/
 .env
 # Virtual environments
 .venv
+
+# docs
+docs/_build/
+.env
+.DS_Store
