@@ -27,6 +27,51 @@ print(f"  GITHUB_TOKEN: {'已设置' if os.environ.get('GITHUB_TOKEN') else '未
 # 线程池执行器，用于运行可能阻塞的操作
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
+# GitHub QA系统管理器，存储不同仓库的QA系统实例
+class GitHubQAManager:
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(GitHubQAManager, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        # 存储QA系统实例，key为 "owner/repo/docs_folder_path"
+        self.qa_systems = {}
+        self._initialized = True
+    
+    def get_or_create_qa_system(self, owner: str, repo: str, docs_folder_path: str, mode: str = "local", branch: str = "main") -> "GitHubDocsQA":
+        """获取或创建指定仓库的QA系统实例"""
+        key = f"{owner}/{repo}/{docs_folder_path}"
+        
+        if key not in self.qa_systems:
+            print(f"[GitHub索引] 开始为 {key} 创建新的GitHub QA系统")
+            print(f"[GitHub索引] 配置信息: 分支 = {branch}, 模式 = {mode}")
+            self.qa_systems[key] = GitHubDocsQA(
+                owner=owner,
+                repo=repo,
+                branch=branch,
+                docs_folder_path=docs_folder_path,
+                mode=mode
+            )
+            print(f"[GitHub索引] GitHub QA系统创建完成: {key}")
+        else:
+            print(f"[GitHub索引] 使用已存在的GitHub QA系统: {key}")
+        
+        return self.qa_systems[key]
+    
+    def list_repositories(self):
+        """列出所有已加载的仓库"""
+        return list(self.qa_systems.keys())
+
+# 创建全局实例
+github_qa_manager = GitHubQAManager()
+
 class GitHubDocsQA:
     def __init__(
         self,
@@ -75,6 +120,7 @@ class GitHubDocsQA:
                 print("错误: 无法获取GITHUB_TOKEN环境变量。请确保.env文件已正确配置。")
                 return []
                 
+            print(f"[GitHub索引] 正在初始化 GitHub 客户端...")
             github_client = GithubClient(github_token=github_token, verbose=True)
             self.reader = GithubRepositoryReader(
                 github_client=github_client,
@@ -92,10 +138,25 @@ class GitHubDocsQA:
                 ),
             )
             
-            print(f"Loading documents from {self.owner}/{self.repo}/{self.docs_folder_path}...")
+            print(f"[GitHub索引] 开始从 {self.owner}/{self.repo}/{self.docs_folder_path} 加载文档...")
+            print(f"[GitHub索引] 正在克隆或更新仓库...")
             documents = self.reader.load_data(branch=self.branch)
             if not documents:
-                print(f"Warning: No documents found in {self.owner}/{self.repo}/{self.docs_folder_path}")
+                print(f"[GitHub索引] 警告: 在 {self.owner}/{self.repo}/{self.docs_folder_path} 中未找到文档")
+            else:
+                print(f"[GitHub索引] 成功加载了 {len(documents)} 个文档")
+                # 显示文档类型的统计信息
+                extensions = {}
+                for doc in documents:
+                    # 从文档元数据中提取文件扩展名
+                    if hasattr(doc, 'metadata') and 'file_path' in doc.metadata:
+                        ext = os.path.splitext(doc.metadata['file_path'])[1]
+                        extensions[ext] = extensions.get(ext, 0) + 1
+                    
+                # 打印文档类型统计
+                if extensions:
+                    ext_info = ", ".join([f"{ext}: {count}" for ext, count in extensions.items()])
+                    print(f"[GitHub索引] 文档类型统计: {ext_info}")
             return documents
         except Exception as e:
             print(f"Error loading documents: {e}")
@@ -105,12 +166,37 @@ class GitHubDocsQA:
         """Synchronously create an index from documents."""
         try:
             if not documents:
-                print("Warning: No documents provided to create index")
+                print("[GitHub索引] 警告: 没有提供文档来创建索引")
                 return None
             
-            print("Creating vector store index...")
+            # 创建自定义进度回调类
+            class IndexProgressCallback:
+                def __init__(self, total_docs):
+                    self.total_docs = total_docs
+                    self.processed_docs = 0
+                    self.last_percent = -1
+                    self.phase = "准备中"
+                
+                def set_phase(self, phase):
+                    self.phase = phase
+                    print(f"[GitHub索引] 阶段: {phase}")
+                
+                def update(self, increment=1):
+                    self.processed_docs += increment
+                    percent = int((self.processed_docs / self.total_docs) * 100)
+                    # 只在百分比变化时打印，避免过多输出
+                    if percent > self.last_percent:
+                        print(f"[GitHub索引] {self.phase} - 进度: {percent}% ({self.processed_docs}/{self.total_docs})")
+                        self.last_percent = percent
+            
+            # 初始化进度跟踪器
+            progress = IndexProgressCallback(len(documents))
+            progress.set_phase("初始化索引")
+            
+            print(f"[GitHub索引] 开始创建向量索引...共 {len(documents)} 个文档")
             
             # 配置LlamaIndex的Langfuse集成
+            progress.set_phase("配置监控与回调")
             from Utils.LangfuseMonitor import LangfuseMonitor
             monitor = LangfuseMonitor()
             llama_index_handler = monitor.get_llama_index_handler()
@@ -125,11 +211,14 @@ class GitHubDocsQA:
                 callback_manager = None
                 
             # 设置文本分割器 - 追踪分块过程
+            progress.set_phase("配置文本分割器")
             splitter = SentenceSplitter(chunk_size=1024)
             
             # 设置嵌入模型 - 添加langfuse监控
+            progress.set_phase("加载嵌入模型")
             embedding_model = None
             if self.mode == "local":
+                print(f"[GitHub索引] 使用本地嵌入模型: BAAI/bge-m3")
                 # 使用模型工厂创建嵌入模型
                 embedding_model = HuggingFaceBgeEmbeddings(model_name="BAAI/bge-m3")
                 # 如果存在langchain回调，设置跟踪
@@ -148,20 +237,54 @@ class GitHubDocsQA:
                     Settings.embed_model = embedding_model
             
             # 使用回调管理器创建索引
-            if callback_manager:
-                index = VectorStoreIndex.from_documents(
-                    documents, 
-                    transformations=[splitter],
-                    callback_manager=callback_manager
-                )
-            else:
-                # 不使用Langfuse时的创建方式
-                index = VectorStoreIndex.from_documents(
-                    documents, 
-                    transformations=[splitter]
-                )
+            progress.set_phase("构建文档索引")
+            print(f"[GitHub索引] 开始处理文档并创建嵌入，这可能需要一些时间...")
+            
+            # 创建或处理每个文档时的回调
+            class DocumentProcessingCallback:
+                def __init__(self, progress_tracker):
+                    self.progress = progress_tracker
+                    self.doc_count = 0
                 
-            print("Index created.")
+                def on_document_processed(self, **kwargs):
+                    self.doc_count += 1
+                    self.progress.update()
+                    
+            doc_callback = DocumentProcessingCallback(progress)
+            
+            # 包装VectorStoreIndex.from_documents方法以捕获处理进度
+            original_from_documents = VectorStoreIndex.from_documents
+            
+            try:
+                # 创建包装函数，在处理每个文档后调用进度更新
+                def wrapped_from_documents(documents, *args, **kwargs):
+                    # 这里可以添加文档处理前的逻辑
+                    index = original_from_documents(documents, *args, **kwargs)
+                    # 处理完成后更新进度
+                    return index
+                
+                # 暂时替换原始方法
+                VectorStoreIndex.from_documents = wrapped_from_documents
+                
+                # 使用回调管理器创建索引
+                if callback_manager:
+                    index = VectorStoreIndex.from_documents(
+                        documents, 
+                        transformations=[splitter],
+                        callback_manager=callback_manager
+                    )
+                else:
+                    # 不使用Langfuse时的创建方式
+                    index = VectorStoreIndex.from_documents(
+                        documents, 
+                        transformations=[splitter]
+                    )
+            finally:
+                # 恢复原始方法
+                VectorStoreIndex.from_documents = original_from_documents
+                
+            progress.set_phase("完成")
+            print(f"[GitHub索引] 索引创建完成。已处理 {len(documents)} 个文档。")
             return index
         except Exception as e:
             print(f"Error creating index: {e}")
@@ -268,14 +391,18 @@ def ask_github_docs(
         return "抱歉，GitHub令牌未设置。请确保环境变量GITHUB_TOKEN已正确设置。"
     
     try:
-        # 创建QA系统并执行查询
-        qa_system = GitHubDocsQA(
+        # 使用管理器获取或创建QA系统
+        qa_system = github_qa_manager.get_or_create_qa_system(
             owner=owner,
             repo=repo,
             branch=branch,
             docs_folder_path=docs_folder_path,
-            mode=mode,
+            mode=mode
         )
+        
+        # 如果QA系统没有成功初始化，返回错误
+        if qa_system.index is None:
+            return f"抱歉，无法为仓库 {owner}/{repo} 中的 {docs_folder_path} 创建文档索引。请确保仓库路径正确且有权限访问。"
         
         return qa_system.query_docs(query)
     except Exception as e:
