@@ -773,6 +773,34 @@ def ask_github_docs(
         traceback.print_exc()
         return f"处理查询时发生严重错误: {str(e)}"
 
+def ask_github_docs_url(url, query):
+    try:
+        path_part = url.split("github.com/")[-1]
+        parts = path_part.split("/")
+        if len(parts) < 2:
+            raise ValueError("URL 至少需要包含 owner/repo")
+        owner = parts[0]
+        repo = parts[1]
+        branch = "main" # 默认分支
+        docs_folder_path = "" # 默认根目录
+        if len(parts) > 3 and parts[2] in ["tree", "blob"]:
+            branch = parts[3]
+            docs_folder_path = "/".join(parts[4:]).strip('/')
+        elif len(parts) > 2:
+            docs_folder_path = "/".join(parts[2:]).strip('/')
+        return ask_github_docs(
+            query=query,
+            owner=owner,
+            repo=repo,
+            branch=branch,
+            docs_folder_path=docs_folder_path,
+            mode="local",
+            use_cache=True
+        )
+    except Exception as e:
+        print(f"[GitHub索引] ask_github_docs_url 执行过程中发生意外错误: {e}")
+        traceback.print_exc()
+        return f"处理查询时发生严重错误: {str(e)}"
 # --- 主程序入口 (用于测试) ---
 if __name__ == "__main__":
     # --- 配置测试参数 ---
