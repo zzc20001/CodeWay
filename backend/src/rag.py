@@ -776,10 +776,9 @@ def ask_github_docs(
 # --- 主程序入口 (用于测试) ---
 if __name__ == "__main__":
     # --- 配置测试参数 ---
-    # test_url = "https://github.com/stepbystepcode/CodeWay/tree/main/docs"
-    # test_url = "https://github.com/langchain-ai/langchain/tree/master/docs/docs" # 尝试一个更大的仓库
-    test_url = "https://github.com/stepbystepcode/CodeWay/tree/main/docs" # 使用你的仓库
-    test_query = "a=?b=? 是什么?" # 你的测试问题
+    test_url = "https://github.com/jax-ml/jax/tree/main/docs"
+    # test_url = "https://github.com/stepbystepcode/CodeWay/tree/main/docs" # 使用你的仓库
+    test_query = "JAX 中的 jit 装饰器有什么用途？" # 你的测试问题
     test_mode = "local"
     use_cache_on_test = True # 设置为 True 测试缓存，False 测试无缓存创建
 
