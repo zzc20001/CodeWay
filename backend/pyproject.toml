@@ -27,13 +27,13 @@ dependencies = [
     "langchain-huggingface>=0.1.2",
     "langfuse>=2.60.2",
     "llama-index-embeddings-langchain>=0.3.0",
+    "agently",
+    "llama-index-embeddings-huggingface>=0.5.2",
 ]
 
-[tool.setuptools]
-packages = ["Agent", "Models", "prompts", "Tools", "Utils"] 
-
 [tool.uv.sources]
-gotrue = { path = "gotrue-2.12.0" }
+gotrue = { path = "./gotrue-2.12.0" }
+agently = { path = "Agently-src" }
 
 [tool.uv]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

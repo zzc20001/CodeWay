@@ -9,10 +9,8 @@ from dotenv import load_dotenv
 from llama_index.core import Settings, VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
 from llama_index.core.callbacks import CallbackManager
-from langchain.tools import Tool
 from llama_index.core.node_parser import SentenceSplitter
-from langchain.embeddings.huggingface import HuggingFaceBgeEmbeddings
-
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 # 确保加载正确的环境变量文件
 # 计算当前文件的目录
 current_dir = pathlib.Path(__file__).parent.absolute()
@@ -235,7 +233,7 @@ class GitHubDocsQA:
         try:
             # 默认模型信息
             model_info = {
-                "name": "BAAI/bge-m3",
+                "name": "all-MiniLM-L6-v2",
                 "dimensions": 1024  # 默认维度
             }
             
@@ -310,10 +308,10 @@ class GitHubDocsQA:
                     if cached_model and 'name' in cached_model:
                         try:
                             # 强制使用与缓存相同的嵌入模型类型和名称
-                            model_name = cached_model.get('name', "BAAI/bge-m3")
+                            model_name = cached_model.get('name', "all-MiniLM-L6-v2")
                             if self.mode == "local":
                                 # 创建与缓存相同的嵌入模型实例
-                                embedding_model = HuggingFaceBgeEmbeddings(model_name=model_name)
+                                embedding_model = HuggingFaceEmbedding(model_name=model_name)
                                 
                                 # 将模型设置到全局设置和索引中
                                 Settings.embed_model = embedding_model
@@ -374,21 +372,6 @@ class GitHubDocsQA:
             
             print(f"[GitHub索引] 开始创建向量索引...共 {len(documents)} 个文档")
             
-            # 配置LlamaIndex的Langfuse集成
-            progress.set_phase("配置监控与回调")
-            from Utils.LangfuseMonitor import LangfuseMonitor
-            monitor = LangfuseMonitor()
-            llama_index_handler = monitor.get_llama_index_handler()
-            langchain_handler = monitor.get_langchain_handler()
-            
-            # 创建回调管理器
-            callbacks = []
-            if llama_index_handler:
-                callbacks.append(llama_index_handler)
-                callback_manager = CallbackManager(callbacks)
-            else:
-                callback_manager = None
-                
             # 设置文本分割器 - 使用更大的块大小减少总块数(性能优化)
             progress.set_phase("配置文本分割器")
             # 使用更大的分块大小，减少分块总数
@@ -405,22 +388,10 @@ class GitHubDocsQA:
                 # 质量优先: "BAAI/bge-m3" (原始模型)
                 model_name = "all-MiniLM-L6-v2"  # 轻量级、更快速的模型
                 print(f"[GitHub索引] 使用高效嵌入模型: {model_name}")
-                embedding_model = HuggingFaceBgeEmbeddings(
+                embedding_model = HuggingFaceEmbedding(
                     model_name=model_name,
-                    model_kwargs={"device": "cpu"},  # 显式指定设备
-                    encode_kwargs={"batch_size": 32}  # 使用批处理加速嵌入
+                    embed_batch_size=32  # 使用批处理加速嵌入
                 )
-                
-                # 如果存在langchain回调，设置跟踪
-                if langchain_handler:
-                    if hasattr(embedding_model, 'callbacks') and embedding_model.callbacks is not None:
-                        embedding_model.callbacks.append(langchain_handler)
-                    elif hasattr(embedding_model, 'client') and hasattr(embedding_model.client, 'callbacks'):
-                        if embedding_model.client.callbacks is None:
-                            embedding_model.client.callbacks = [langchain_handler]
-                        else:
-                            embedding_model.client.callbacks.append(langchain_handler)
-            
                 # 配置Settings
                 if embedding_model:
                     Settings.embed_model = embedding_model
@@ -440,24 +411,14 @@ class GitHubDocsQA:
             # 记录开始时间优化
             start_time = time.time()
             
-            # 使用回调管理器创建索引
             # 性能优化：这里使用默认分块器，不再单独指定
             try:
-                # 使用回调管理器创建索引
-                if callback_manager:
-                    index = VectorStoreIndex.from_documents(
-                        documents, 
-                        transformations=[splitter],  # 使用优化的分割器
-                        callback_manager=callback_manager,
-                        show_progress=True  # 显示进度条
-                    )
-                else:
-                    # 不使用Langfuse，使用默认构建索引
-                    index = VectorStoreIndex.from_documents(
-                        documents, 
-                        transformations=[splitter],
-                        show_progress=True  # 显示进度条
-                    )
+                # 不使用Langfuse，使用默认构建索引
+                index = VectorStoreIndex.from_documents(
+                    documents, 
+                    transformations=[splitter],
+                    show_progress=True  # 显示进度条
+                )
                 
                 # 记录完成时间和性能指标
                 end_time = time.time()
@@ -505,9 +466,9 @@ class GitHubDocsQA:
         """执行同步查询，在线程池中调用"""
         try:
             # 在查询前确保所有层面都使用正确的嵌入模型
-            embed_model = HuggingFaceBgeEmbeddings(model_name="BAAI/bge-m3")
+            embed_model = HuggingFaceEmbedding(model_name="all-MiniLM-L6-v2")
             Settings.embed_model = embed_model
-            print(f"[GitHub索引] 查询前强制设置统一嵌入模型: BAAI/bge-m3")
+            print(f"[GitHub索引] 查询前强制设置统一嵌入模型: all-MiniLM-L6-v2")
             
             # 尝试访问查询引擎内部并设置嵌入模型
             if hasattr(self.query_engine, '_service_context'):
@@ -544,19 +505,6 @@ class GitHubDocsQA:
                 print(f"[GitHub索引] 维度不匹配错误，请确保查询与索引使用相同的嵌入模型")
             return f"查询执行错误: {str(e)}"
     
-    def get_tool(self) -> Tool:
-        """
-        Get a LangChain Tool instance for this QA system.
-        
-        Returns:
-            Tool: Configured LangChain tool
-        """
-        return Tool(
-            name="github_document_query",
-            func=self.query_docs,
-            description=f"Answers questions about the content within the '{self.docs_folder_path}' folder of the GitHub repository '{self.owner}/{self.repo}'. Use this for specific questions about the documentation found there."
-        )
-
 async def ask_github_docs_async(
     query: str,
     owner: str = "stepbystepcode",
@@ -631,3 +579,9 @@ def ask_github_docs(
     except Exception as e:
         print(f"GitHub文档查询失败: {e}")
         return f"处理查询时出错: {str(e)}"
+
+if __name__ == "__main__":
+    print("[GitHub索引] GitHub QA系统管理器已初始化")
+    
+    # 测试查询
+    print(ask_github_docs("a=?b=?"))
