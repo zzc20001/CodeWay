@@ -12,11 +12,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 const urlSchema = z.string().url("Please enter a valid URL")
 
 export interface UrlManagerProps {
-  urls: string[]
-  onUrlsChange: (urls: string[]) => void
+  url: string
+  onUrlChange: (url: string) => void
 }
 
-export default function UrlManager({ urls, onUrlsChange }: UrlManagerProps) {
+export default function UrlManager({ url, onUrlChange }: UrlManagerProps) {
   const [inputValue, setInputValue] = useState("")
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,15 +31,10 @@ export default function UrlManager({ urls, onUrlsChange }: UrlManagerProps) {
       // Validate URL format
       urlSchema.parse(inputValue)
 
-      // Check for duplicates
-      if (urls.includes(inputValue)) {
-        setError("This URL already exists in the list")
-        return
-      }
-
-      // Add URL to the list
-      onUrlsChange([...urls, inputValue])
+      // Set the URL
+      onUrlChange(inputValue)
       setInputValue("")
+      setOpen(false)
     } catch (err) {
       if (err instanceof z.ZodError) {
         setError(err.errors[0].message)
@@ -55,8 +50,8 @@ export default function UrlManager({ urls, onUrlsChange }: UrlManagerProps) {
     }
   }
 
-  const handleDeleteUrl = (indexToDelete: number) => {
-    onUrlsChange(urls.filter((_, index) => index !== indexToDelete))
+  const handleClearUrl = () => {
+    onUrlChange('')
   }
 
   return (
@@ -64,12 +59,13 @@ export default function UrlManager({ urls, onUrlsChange }: UrlManagerProps) {
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="h-8 w-8">
           <Plus className="h-4 w-4" />
-          <span className="sr-only">Manage URLs</span>
+          <span className="sr-only">Manage URL</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>URL Manager</DialogTitle>
+          {url && <p className="text-sm text-muted-foreground mt-1">当前URL: {url}</p>}
         </DialogHeader>
         <div className="flex items-center space-x-2">
           <Input
@@ -94,28 +90,22 @@ export default function UrlManager({ urls, onUrlsChange }: UrlManagerProps) {
           </Alert>
         )}
 
-        <div className="mt-4 max-h-[200px] overflow-y-auto">
-          {urls.length > 0 ? (
-            <ul className="space-y-2">
-              {urls.map((url, index) => (
-                <li key={index} className="rounded-md border p-2 text-sm break-all flex items-center justify-between">
-                  <span className="mr-2">{url}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteUrl(index)}
-                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete</span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-center text-sm text-muted-foreground">No URLs added yet</p>
-          )}
-        </div>
+        {url && (
+          <div className="mt-4">
+            <div className="rounded-md border p-2 text-sm break-all flex items-center justify-between">
+              <span className="mr-2">{url}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClearUrl}
+                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="sr-only">Clear</span>
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

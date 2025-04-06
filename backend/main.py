@@ -8,21 +8,13 @@ from dotenv import load_dotenv
 import httpx
 from typing import Optional
 from datetime import datetime
+from src.agent import agent
+class GithubUrlRequest(BaseModel):
+    url: str = Field(..., description="GitHub URL, e.g. https://github.com/jax-ml/jax/tree/main/docs")
 
-# LangChain imports
-from Agent.ReAct import ReActAgent
-from Models.Factory import ChatModelFactory
-from Tools import *
-from Tools.PythonTool import ExcelAnalyser
-from langchain_community.chat_message_histories.in_memory import ChatMessageHistory
-from langchain_openai import ChatOpenAI
-
-# Langfuse 监控支持
-from Utils.LangfuseMonitor import LangfuseMonitor
 
 # Load environment variables
 load_dotenv()
-
 
 app = FastAPI()
 # Configure CORS
@@ -70,81 +62,7 @@ class AuthResponse(BaseModel):
     user_id: str
 
 
-class GptQueryRequest(BaseModel):
-    query: str
-    mode: str = "local"
-    session_id: Optional[str] = Field(default=None, description="Session ID for maintaining conversation context")
 
-
-class GithubUrlRequest(BaseModel):
-    url: str = Field(..., description="GitHub URL, e.g. https://github.com/jax-ml/jax/tree/main/docs")
-
-
-class GptQueryResponse(BaseModel):
-    response: str
-    session_id: str
-
-
-# Create a dictionary to store chat histories by session_id
-chat_histories = {}
-
-# 初始化 Langfuse 监控
-langfuse_monitor = LangfuseMonitor()
-
-# Initialize LangChain agent
-def get_langchain_agent():
-    # Ensure environment variables are properly loaded
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    # Print debug info about available environment variables (without showing the actual values)
-    print("Available environment variables:")
-    required_vars = ["OPENAI_API_KEY", "OPENAI_API_BASE", "LOCAL_API_BASE", "GITHUB_TOKEN"]
-    for var in required_vars:
-        print(f"  {var}: {'✅ Set' if os.environ.get(var) else '❌ Not set'}")
-
-    # Create model with more explicit error handling
-    try:
-        # Use a safer default model configuration
-        llm = ChatOpenAI(
-            model_name="gemma3",  # Use a more reliable model
-            temperature=0.2,
-            request_timeout=60,  # Longer timeout
-        )
-        print("LLM initialized successfully")
-    except Exception as e:
-        print(f"Error initializing LLM: {str(e)}")
-        # Fallback to a very simple configuration
-        llm = ChatOpenAI(temperature=0)
-    
-    # Use a minimal set of tools to reduce potential errors
-    tools = [
-        finish_placeholder,  # Always include the finish tool
-    ]
-    
-    # Add optional tools if they're available and properly initialized
-    try:
-        tools.append(document_qa_tool)
-        tools.append(document_generation_tool)
-        tools.append(github_document_query_tool)
-        print("Document tools loaded successfully")
-    except Exception as e:
-        print(f"Error loading document tools: {str(e)}")
-    
-    # Define agent with more explicit error handling
-    try:
-        agent = ReActAgent(
-            llm=llm,
-            tools=tools,
-            work_dir="./data",
-            main_prompt_file="./prompts/main/main.txt",
-            max_thought_steps=5,  # Reduce max steps for initial testing
-        )
-        print("Agent initialized successfully")
-        return agent
-    except Exception as e:
-        print(f"Error initializing agent: {str(e)}")
-        raise
 
 
 @app.get("/")
@@ -225,74 +143,6 @@ async def verify(verify_data: VerifyRequest, supabase: Client = Depends(get_supa
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Verification failed: {str(e)}")
 
-# GPT Agent endpoint
-@app.post("/api/gpt", response_model=GptQueryResponse)
-async def query_gpt(request: GptQueryRequest):
-    try:
-        mode = request.mode
-        if mode == "local":
-            os.environ["OPENAI_API_BASE"] = os.environ.get("LOCAL_API_BASE")
-        # Generate a random session ID if not provided
-        session_id = request.session_id or f"session_{len(chat_histories) + 1}"
-        
-        # 初始化Langfuse监控
-        langfuse_monitor = LangfuseMonitor()
-        langfuse_handler = langfuse_monitor.get_langchain_handler(session_id=session_id)
-        
-        # 创建回调列表，如果Langfuse启用，则包含Langfuse处理程序
-        callbacks = []
-        if langfuse_handler:
-            callbacks.append(langfuse_handler)
-        
-        # Get or create chat history for this session
-        if session_id not in chat_histories:
-            chat_histories[session_id] = ChatMessageHistory()
-        
-        try:
-            # Get the agent
-            agent = get_langchain_agent()
-            
-            # Log the query
-            print(f"Processing query: {request.query[:50]}...")
-            
-            # Run the agent with the query，添加Langfuse回调
-            response = agent.run(
-                task=request.query,
-                chat_history=chat_histories[session_id],
-                verbose=True,  # Enable verbose output for debugging
-                session_id=session_id,  # 传递会话ID
-                user_id=None,  # 可选：如果有用户ID也可以传递
-                callbacks=callbacks  # 传递Langfuse回调
-            )
-            
-            return {
-                "response": response,
-                "session_id": session_id
-            }
-            
-        except Exception as agent_error:
-            # If agent execution fails, provide a fallback response
-            error_message = str(agent_error)
-            print(f"Agent execution error: {error_message}")
-            
-            # Provide a more user-friendly message for the streaming error
-            if "No generation chunks were returned" in error_message:
-                response_message = "抱歉，处理请求时发生错误：模型未返回任何内容。可能是网络连接问题或模型服务暂时不可用。请稍后再试。"
-            else:
-                response_message = f"抱歉，处理请求时发生问题: {error_message}"
-                
-            return {
-                "response": response_message,
-                "session_id": session_id
-            }
-            
-    except Exception as e:
-        import traceback
-        print(f"Error in query_gpt: {str(e)}")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"GPT query failed: {str(e)}")
-
-
 @app.post("/api/add-url")
 async def add_github_url(request: GithubUrlRequest):
     """Add a GitHub URL to create a vector database for its documentation"""
@@ -319,7 +169,7 @@ async def add_github_url(request: GithubUrlRequest):
         print(f"Processing GitHub documentation: Owner={owner}, Repo={repo}, Path={docs_path}")
         
         # 使用GitHubQAManager工具管理QA系统实例
-        from Tools.GithubDocumentQueryTool import github_qa_manager
+        from src.rag import github_qa_manager
         
         # 获取或创建QA系统并加载文档（这会触发向量索引的创建）
         qa_system = github_qa_manager.get_or_create_qa_system(
@@ -350,3 +200,14 @@ async def add_github_url(request: GithubUrlRequest):
 
 # For development server (uvicorn/granian)
 # Command: granian --interface asgi main:app
+
+class ChatRequest(BaseModel):
+    query: str = Field(..., description="Query to ask about the documentation")
+    url: str = Field(..., description="URL of the GitHub repository")
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    query = f"在{request.url}中，{request.query}"
+    return {
+        "response": agent.input(query).start()
+    }

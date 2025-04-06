@@ -76,7 +76,7 @@ function ChatGPT() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [urls, setUrls] = useState<string[]>([]);
+  const [url, setUrl] = useState<string>('');
   
   // Check authentication status on component mount
   useEffect(() => {
@@ -146,11 +146,21 @@ function ChatGPT() {
     const currentChat = updatedChats.find(chat => chat.id === activeChat);
     if (!currentChat) return;
     
-    // Format messages for the API
-    const apiMessages = convertMessagesToApiFormat(
-      currentChat.messages,
-      model
-    );
+    // Format request in OpenAI API format
+    const messages = [
+      ...activeMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      { role: 'user' as const, content: inputValue }
+    ];
+
+    const requestData = convertMessagesToApiFormat(messages, model);
+    
+    // Add URL to the request
+    if (url) {
+      requestData.url = url;
+    }
     
     // Create an initial streaming response message
     const streamingMessage: Message = {
@@ -180,7 +190,7 @@ function ChatGPT() {
     // Send request to ChatGPT API with streaming
     try {
       await streamChatCompletion(
-        apiMessages,
+        requestData,
         {
           onChunk: (chunk) => {
             const content = chunk.choices[0]?.delta?.content || '';
@@ -476,7 +486,7 @@ function ChatGPT() {
               }}
             />
             <div className="absolute right-2 bottom-2 flex items-center gap-1">
-              <UrlManager urls={urls} onUrlsChange={setUrls} />
+              <UrlManager url={url} onUrlChange={setUrl} />
               <Button 
                 size="icon" 
                 variant="ghost" 

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 export type BackendApiRequest = {
   query: string;
   session_id?: string;
+  url?: string;
   mode?: string;
 };
 
@@ -24,6 +25,7 @@ export type ChatCompletionRequest = {
   max_tokens?: number;
   stream?: boolean;
   session_id?: string; // 添加session_id字段用于传递给后端
+  url?: string; // 添加url字段
 };
 
 export type ChatCompletionResponse = {
@@ -78,11 +80,11 @@ export const streamChatGptRequest = async (
     // 构建后端API请求
     const backendRequest: BackendApiRequest = {
       query: lastUserMessage.content,
-      session_id: requestData.session_id,
-      mode: 'local' // 默认使用本地模型
+      url: requestData.url,
+      // mode: 'local' // 默认使用本地模型
     };
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/gpt`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

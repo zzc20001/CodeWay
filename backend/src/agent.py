@@ -1,6 +1,6 @@
 import Agently
 import os
-from rag import ask_github_docs_url
+from src.rag import ask_github_docs_url
 # 创建一个Agent工厂实例
 agent_factory = (
     Agently.AgentFactory()
@@ -51,4 +51,4 @@ agent.register_tool(
 )
 """发起请求"""
 # print(agent.input("在https://github.com/jax-ml/jax/tree/main/docs 中，JAX 中的 jit 装饰器有什么用途？").start())  
-print(agent.input("在https://github.com/stepbystepcode/CodeWay/tree/main/docs 中，a=?b=?").start())  
+# print(agent.input("在https://github.com/stepbystepcode/CodeWay/tree/main/docs 中，a=?b=?").start())  
