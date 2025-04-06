@@ -8,34 +8,20 @@ import pathlib
 from dotenv import load_dotenv
 from llama_index.core import Settings, VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
-from llama_index.core.callbacks import CallbackManager
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-# 确保加载正确的环境变量文件
-# 计算当前文件的目录
 current_dir = pathlib.Path(__file__).parent.absolute()
-# 计算后端根目录的路径(假设结构是backend/Tools/当前文件)
 backend_dir = current_dir.parent
-# 加载根目录中的.env文件
 dotenv_path = backend_dir / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-# 打印环境变量状态(仅调试用)
-print(f"[GithubDocumentQueryTool] 环境变量状态:")
-print(f"  GITHUB_TOKEN: {'已设置' if os.environ.get('GITHUB_TOKEN') else '未设置'}")
-
-# 定义缓存目录
 CACHE_DIR = backend_dir / "cache" / "github_indexes"
-# 确保缓存目录存在
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# 导入时间模块来跟踪性能
 import time
 
-# 线程池执行器，用于运行可能阻塞的操作
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
-# GitHub QA系统管理器，存储不同仓库的QA系统实例
 class GitHubQAManager:
     _instance = None
     
@@ -533,10 +519,7 @@ async def ask_github_docs_async(
 
 def ask_github_docs(
     query: str,
-    owner: str = "stepbystepcode",
-    repo: str = "CodeWay",
-    branch: str = "main",
-    docs_folder_path: str = "docs",
+    url: str,
     mode: str = "local",
     use_cache: bool = True,
 ) -> str:
@@ -555,6 +538,12 @@ def ask_github_docs(
         str: The answer to the query
     """
     # 直接从环境变量获取凭证
+    parts = url.replace("https://github.com/", "").split("/")
+    owner = parts[0]
+    repo = parts[1]
+    branch = parts[3]
+    docs_folder_path = "/".join(parts[4:])
+    print(f"[GitHub索引] 获取到的参数: owner={owner}, repo={repo}, branch={branch}, docs_folder_path={docs_folder_path}")
     github_token = os.environ.get("GITHUB_TOKEN")
     
     if not github_token:
@@ -584,4 +573,4 @@ if __name__ == "__main__":
     print("[GitHub索引] GitHub QA系统管理器已初始化")
     
     # 测试查询
-    print(ask_github_docs("a=?b=?"))
+    print(ask_github_docs("a=?b=?", "https://github.com/stepbystepcode/CodeWay/tree/main/docs"))

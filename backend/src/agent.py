@@ -1,7 +1,7 @@
 """创建Agent实例"""
 import Agently
 import os
-from github_reader import get_markdown_urls_from_github
+from rag import ask_github_docs
 agent_factory = (
     Agently.AgentFactory()
         # 给Agent工厂实例提供设置项：
@@ -23,15 +23,19 @@ agent = agent_factory.create_agent()
 
 # 自定义工具信息字典
 tool_info = {
-    "tool_name": "get_markdown_urls_from_github",
-    "desc": "get markdown urls from github",
+    "tool_name": "ask_github_docs",
+    "desc": "Query documentation in a GitHub repository and return the answer.",
     "args": {
-        "github_url": (
+        "query": (
             "str",
-            "[*Required] GitHub URL in format https://github.com/{owner}/{repo}/tree/{branch}/{path}"
-        )
+            "[*Required] Query to ask about the documentation",
+        ),
+        "url": (
+            "str",
+            "[*Required] URL of the GitHub repository",
+        ),
     },
-    "func": get_markdown_urls_from_github
+    "func": ask_github_docs
 }
 # 向Agent实例注册自定义工具
 agent.register_tool(
@@ -41,5 +45,4 @@ agent.register_tool(
     func = tool_info["func"],
 )
 """发起请求"""
-# 正确的方式是给agent一个指令，让它使用工具，而不是直接写工具调用代码
-print(agent.input("请获取GitHub仓库 https://github.com/jax-ml/jax/tree/main/docs 中的所有markdown文件的URL列表").start().result)
+print(agent.input("请根据GitHub仓库 https://github.com/stepbystepcode/CodeWay/tree/main/docs 中的文档回答问题：a=?b=?").start())
